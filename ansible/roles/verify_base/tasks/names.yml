@@ -1,0 +1,41 @@
+---
+- name: Hostname | assert matches inventory name
+  ansible.builtin.assert:
+    that:
+      - ansible_hostname == inventory_hostname
+    success_msg: "hostname = {{ ansible_hostname }}"
+    fail_msg: "호스트명 {{ ansible_hostname }} ≠ 인벤토리 {{ inventory_hostname }}"
+
+# getent 는 /etc/hosts → DNS 순서(nsswitch)로 실제 해석 결과를 보여준다
+- name: Name resolution | get every node
+  ansible.builtin.command: getent hosts {{ item }}
+  loop: "{{ groups['all'] }}"
+  register: resolved
+  changed_when: false
+  failed_when: false       # 해석 실패(rc=2)도 아래 assert 에서 판단
+
+- name: Name resolution | assert every node resolves to its mgmt_ip
+  ansible.builtin.assert:
+    that:
+      # 출력 형식: "10.10.0.11      os-ctl1" → 첫 칸이 IP
+      - item.rc == 0
+      - (item.stdout.split() | first) == hostvars[item.item].mgmt_ip
+    success_msg: "{{ item.item }} → {{ hostvars[item.item].mgmt_ip }}"
+    fail_msg: >-
+      {{ item.item }} → {{ item.stdout.split() | first | default('해석 실패') }}
+      (기대값 {{ hostvars[item.item].mgmt_ip }}{{ ', 127.0.1.1 줄이 남아 있음' if '127.0.1.1' in item.stdout else '' }})
+  loop: "{{ resolved.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: /etc/hosts | get content
+  ansible.builtin.slurp:
+    src: /etc/hosts
+  register: hosts_file
+
+- name: /etc/hosts | assert no 127.0.1.1 line
+  ansible.builtin.assert:
+    that:
+      - (hosts_file.content | b64decode) is not search('(?m)^\s*127\.0\.1\.1(\s|$)')
+    success_msg: "127.0.1.1 줄 없음"
+    fail_msg: "/etc/hosts 에 127.0.1.1 줄이 있음 (RabbitMQ·Kolla 가 호스트명을 루프백으로 해석)"

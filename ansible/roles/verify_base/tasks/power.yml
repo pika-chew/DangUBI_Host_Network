@@ -1,0 +1,38 @@
+---
+# systemctl is-enabled 는 target 마다 한 줄씩 출력. masked 면 rc≠0 이라 failed_when: false
+- name: Sleep targets | get state
+  ansible.builtin.command: systemctl is-enabled sleep.target suspend.target hibernate.target hybrid-sleep.target
+  register: sleep_targets
+  changed_when: false
+  failed_when: false
+
+- name: Sleep targets | assert masked
+  ansible.builtin.assert:
+    that:
+      - sleep_targets.stdout_lines | length == 4
+      - sleep_targets.stdout_lines | unique == ['masked']
+    success_msg: "sleep/suspend/hibernate/hybrid-sleep = masked"
+    fail_msg: "상태: {{ sleep_targets.stdout_lines }} (sleep, suspend, hibernate, hybrid-sleep 순)"
+
+# 파일이 아니라 logind 가 "지금 실제로 쓰는 값"을 읽는다 (logind 는 재부팅 시에만 다시 읽음)
+- name: Lid switch | get logind runtime value
+  ansible.builtin.command: >-
+    busctl get-property org.freedesktop.login1 /org/freedesktop/login1
+    org.freedesktop.login1.Manager {{ item }}
+  loop:
+    - HandleLidSwitch
+    - HandleLidSwitchExternalPower
+  register: lid
+  changed_when: false
+  when: "'controllers' in group_names"
+
+- name: Lid switch | assert ignore
+  ansible.builtin.assert:
+    that:
+      - item.stdout == 's "ignore"'
+    success_msg: "{{ item.item }} = ignore"
+    fail_msg: "{{ item.item }} = {{ item.stdout }} (설정 파일만 바뀌고 재부팅 대기 중일 수 있음)"
+  loop: "{{ lid.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: "'controllers' in group_names"

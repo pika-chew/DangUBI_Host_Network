@@ -1,0 +1,13 @@
+---
+# 실행 중 값 1 은 verify_network(nat.yml) 에서 이미 점검 → 여기서는 재부팅 후에도 유지되는지만 본다
+- name: IP forwarding | get persisted file
+  ansible.builtin.stat:
+    path: /etc/sysctl.d/99-forward.conf
+  register: fwd_file
+
+- name: IP forwarding | assert persisted
+  ansible.builtin.assert:
+    that:
+      - fwd_file.stat.exists
+    success_msg: "/etc/sysctl.d/99-forward.conf 있음"
+    fail_msg: "/etc/sysctl.d/99-forward.conf 없음 (재부팅하면 포워딩이 꺼짐)"

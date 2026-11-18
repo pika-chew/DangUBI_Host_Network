@@ -1,0 +1,19 @@
+---
+- name: chrony | get service state
+  ansible.builtin.command: systemctl is-active chrony
+  register: chrony_state
+  changed_when: false
+  failed_when: false       # inactive 면 rc≠0
+
+- name: chrony | get NTP sync state
+  ansible.builtin.command: timedatectl show -p NTPSynchronized --value
+  register: ntp_sync
+  changed_when: false
+
+- name: chrony | assert active and synchronized
+  ansible.builtin.assert:
+    that:
+      - chrony_state.stdout == 'active'
+      - ntp_sync.stdout == 'yes'
+    success_msg: "chrony active, NTP 동기화됨"
+    fail_msg: "chrony = {{ chrony_state.stdout }}, NTPSynchronized = {{ ntp_sync.stdout }}"

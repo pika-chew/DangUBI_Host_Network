@@ -1,0 +1,19 @@
+---
+# base role 이 표현하는 상태가 실제로 적용돼 있는지 점검 (읽기 전용)
+# 점검 순서: 모든 노드 공통 → 컨트롤러 전용
+
+- name: Hostname and name resolution
+  ansible.builtin.include_tasks: names.yml
+
+- name: Power (sleep targets, lid switch)
+  ansible.builtin.include_tasks: power.yml
+
+- name: Firewall (ufw)
+  ansible.builtin.include_tasks: firewall.yml
+
+- name: IP forwarding persisted (controllers only)
+  ansible.builtin.include_tasks: forward.yml
+  when: "'controllers' in group_names"
+
+- name: Time sync (chrony)
+  ansible.builtin.include_tasks: chrony.yml
