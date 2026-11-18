@@ -27,44 +27,20 @@ SSH 접속 주소(`ansible_host`)와 계정은 [`ansible/inventory/hosts.yml`](a
 | 업링크 | `wlo1` (Wi-Fi) | 인터넷으로 나가는 기본 경로 |
 | 관리망 | `10.10.0.0/24` | kolla 관리망. 노드 간 API·DB·메시지 큐 통신 |
 | 외부망 | `10.20.0.0/24` | Neutron 외부망. VM의 floating IP 대역 |
-| NAT VIP | `10.20.0.1` | 외부망의 게이트웨이. 컨트롤러 중 한 대가 보유 |
+| 내부 VIP | `10.10.0.10` | 관리망 VIP (keepalived). 컨트롤러 중 한 대가 보유 |
+| NAT VIP | `10.20.0.1` | 외부망의 게이트웨이 (keepalived). 컨트롤러 중 한 대가 보유 |
 | Ansible 제어 | Tailscale (`100.x.x.x`) | 작업자 PC에서 각 노드로 SSH 접속 |
 
-```mermaid
-flowchart TB
-    internet((Internet))
-
-    subgraph CTL["os-ctl1 ~ 3 (controllers)"]
-        direction TB
-        wlo1_c["wlo1 (Wi-Fi)<br/>기본 경로"]
-        br["br-mgmt<br/>10.10.0.1x/24 + 10.20.0.x/24"]
-        vh["veth-host"]
-        vn["veth-neutron<br/>→ Neutron 외부 인터페이스"]
-        br --- vh
-        vh ===|veth pair| vn
-        br -. "MASQUERADE<br/>10.20.0.0/24 → wlo1" .-> wlo1_c
-    end
-
-    subgraph CMP["os-cmp1 (computes)"]
-        direction TB
-        wlo1_p["wlo1 (Wi-Fi)<br/>기본 경로"]
-        enp["enp3s0<br/>10.10.0.14/24 + 10.20.0.5/24"]
-    end
-
-    L2["유선 L2 세그먼트<br/>관리망 10.10.0.0/24 · 외부망 10.20.0.0/24"]
-
-    br --- L2
-    enp --- L2
-    wlo1_c --> internet
-    wlo1_p --> internet
-```
+![OpenStack 클러스터 네트워크 구성도](docs/images/network-topology.jpg)
 
 ### 핵심 포인트
 
-- **관리망과 외부망은 같은 인터페이스를 씁니다.** 컨트롤러는 `br-mgmt`, 컴퓨트는 `enp3s0` 하나에 두 대역의 IP가 함께 붙습니다.
+- **모든 노드는 1Gbps 허브·L2 스위치 하나로 연결됩니다.** 관리망과 외부망이 같은 L2 세그먼트를 공유합니다.
+- **관리망과 외부망은 같은 인터페이스를 씁니다.** 컨트롤러는 유선 NIC `enp2s0`을 포트로 둔 `br-mgmt` 브리지에, 컴퓨트는 `enp3s0`에 두 대역의 IP가 함께 붙습니다.
 - **컨트롤러의 veth pair.** `veth-host`는 `br-mgmt`에 포트로 꽂히고, 반대쪽 `veth-neutron`은 Neutron이 외부 인터페이스로 가져갑니다. 이 pair는 `veth-neutron.service`(systemd)가 부팅할 때 만들고, NetworkManager는 두 인터페이스를 관리하지 않도록(`unmanaged`) 설정합니다.
 - **외부망은 NAT으로 인터넷에 나갑니다.** 컨트롤러는 IP 포워딩을 켜고, `10.20.0.0/24`에서 나가는 트래픽을 `wlo1`로 MASQUERADE합니다. 규칙은 `/etc/iptables/rules.v4`에 저장해서 재부팅 뒤에도 유지됩니다.
-- **NAT VIP `10.20.0.1`**은 외부망의 기본 게이트웨이이며, 컨트롤러 중 한 대가 보유합니다.
+- **NAT VIP `10.20.0.1`**은 외부망의 기본 게이트웨이입니다. keepalived가 컨트롤러 3대 중 한 대에 VIP를 올리고, VIP를 가진 노드에서만 NAT 경로가 실제로 쓰입니다.
+- **컴퓨트 노드에는 qrouter와 br-ex가 없습니다.** VM 트래픽은 VXLAN 터널(관리망)을 타고 컨트롤러의 qrouter로 가서 외부로 나갑니다.
 
 ## 2. 폴더 구조
 
