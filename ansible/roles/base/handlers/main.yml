@@ -1,0 +1,15 @@
+---
+# base role handlers
+# 🚨 systemd-logind, NetworkManager, docker 관련 handler 는 만들지 않는다.
+
+# sources.d 파일 변경 → 소스 목록만 다시 읽음 (서비스 중단 없음)
+# command 모듈은 check 모드에서 실행되지 않는다. handler 자체도 변경이 있을 때만 실행된다.
+- name: Reload chrony sources
+  ansible.builtin.command: chronyc reload sources
+  changed_when: true    # 호출됐다는 것 자체가 반영 작업이므로 changed 로 보고
+
+# conf.d 파일 변경 → allow/local 설정은 재시작해야 반영됨 (chrony 재시작은 안전)
+- name: Restart chrony
+  ansible.builtin.systemd_service:
+    name: chrony
+    state: restarted

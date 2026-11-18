@@ -1,0 +1,55 @@
+---
+# chrony (전체)
+# 시간이 노드마다 어긋나면 RabbitMQ·Galera·Keystone 토큰 검증 등이 실패한다.
+# NTP 소스 파일은 노드마다 적용 여부가 다를 수 있어 변수로 켜고 끈다.
+# 변수가 false 면 해당 파일은 관리하지 않는다 (만들지도, 지우지도 않음).
+# Ubuntu 기본 /etc/chrony/chrony.conf 가 sourcedir /etc/chrony/sources.d, confdir /etc/chrony/conf.d 를 읽는다.
+
+# 왜: chrony 가 없으면 시간 동기화가 안 된다. 이미 설치돼 있으면 ok.
+- name: chrony | package installed
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+
+# 왜: 재부팅 후에도 자동으로 시간 동기화가 돌아야 한다.
+- name: chrony | service enabled and started
+  ansible.builtin.systemd_service:
+    name: chrony
+    enabled: true
+    state: started
+
+# 왜: 기본 Ubuntu pool 대신 국내에서 응답이 빠른 서버를 쓴다.
+# sources.d 변경은 chrony 재시작 없이 "chronyc reload sources" 로 반영된다.
+- name: chrony | kr.sources content
+  ansible.builtin.copy:
+    dest: "{{ chrony_kr_sources_path }}"
+    content: "{{ chrony_kr_sources_content }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: chrony_kr_sources
+  notify: Reload chrony sources
+
+# 왜: 클러스터 내부 기준 시계 역할 (os-ctl1). 관리망 노드들의 질의를 허용하고,
+# 외부 NTP 가 끊겨도 stratum 10 으로 자기 시간을 내보내 노드끼리 시간이 어긋나지 않게 한다.
+# conf.d 의 allow/local 은 reload 로 반영되지 않아 chrony 재시작이 필요하다 (chrony 재시작은 안전).
+- name: chrony | cluster server config (conf.d)
+  ansible.builtin.copy:
+    dest: "{{ chrony_cluster_server_path }}"
+    content: "{{ chrony_cluster_server_content }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: chrony_cluster_server | bool
+  notify: Restart chrony
+
+# 왜: 나머지 노드는 클러스터 서버를 우선(prefer) 소스로 삼아, 외부 NTP 상태와 관계없이 서로 같은 시간을 유지한다.
+- name: chrony | cluster client source (sources.d)
+  ansible.builtin.copy:
+    dest: "{{ chrony_cluster_client_path }}"
+    content: "{{ chrony_cluster_client_content }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: chrony_cluster_client | bool
+  notify: Reload chrony sources
