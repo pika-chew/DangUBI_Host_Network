@@ -1,0 +1,3 @@
+---
+# controllers 그룹 전용 변수
+mgmt_if: br-mgmt           # 관리망·외부망 IP가 붙는 인터페이스 (브리지)

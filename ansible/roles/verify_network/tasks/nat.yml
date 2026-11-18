@@ -1,0 +1,42 @@
+---
+# 컨트롤러가 외부망(ext_cidr) 트래픽을 uplink_if로 NAT해서 내보내는지 점검
+
+- name: Report NAT VIP holder
+  ansible.builtin.debug:
+    msg: "{{ nat_vip }} 보유 중"
+  when: (nat_vip ~ '/') in mgmt_addr.stdout    # mgmt_addr는 mgmt_addr.yml에서 register
+
+- name: IP forwarding | get sysctl value
+  ansible.builtin.command: sysctl -n net.ipv4.ip_forward
+  register: ipf
+  changed_when: false
+
+- name: IP forwarding | assert enabled
+  ansible.builtin.assert:
+    that:
+      - ipf.stdout == '1'
+    fail_msg: "net.ipv4.ip_forward = {{ ipf.stdout }}"
+
+- name: MASQUERADE rule | get from running iptables
+  # iptables -C: 규칙이 있으면 rc=0, 없으면 rc=1 (조회만 하고 바꾸지 않음)
+  ansible.builtin.command: >-
+    iptables -t nat -C POSTROUTING -s {{ ext_cidr }} -o {{ uplink_if }} -j MASQUERADE
+  register: masq
+  changed_when: false
+  failed_when: false
+
+- name: MASQUERADE rule | get from rules.v4 (kept after reboot)
+  # iptables-persistent는 부팅 시 /etc/iptables/rules.v4를 읽어 규칙을 복원함
+  ansible.builtin.command: >-
+    grep -qF -- "-A POSTROUTING -s {{ ext_cidr }} -o {{ uplink_if }} -j MASQUERADE"
+    /etc/iptables/rules.v4
+  register: masq_saved
+  changed_when: false
+  failed_when: false
+
+- name: MASQUERADE rule | assert running and saved
+  ansible.builtin.assert:
+    that:
+      - masq.rc == 0
+      - masq_saved.rc == 0
+    fail_msg: "실행 중 rc={{ masq.rc }}, 저장 파일 rc={{ masq_saved.rc }} (0이 아닌 쪽이 없음)"

@@ -1,0 +1,17 @@
+---
+# 점검 순서: 모든 노드 공통 → 컨트롤러 전용
+# include_tasks + when: 조건이 거짓인 호스트는 파일 전체를 한 줄(skipping)로 건너뜀
+
+- name: Default route
+  ansible.builtin.include_tasks: route.yml
+
+- name: Management interface addresses
+  ansible.builtin.include_tasks: mgmt_addr.yml
+
+- name: veth pair (controllers only)
+  ansible.builtin.include_tasks: veth.yml
+  when: "'controllers' in group_names"
+
+- name: IP forwarding and NAT (controllers only)
+  ansible.builtin.include_tasks: nat.yml
+  when: "'controllers' in group_names"

@@ -1,0 +1,41 @@
+---
+# veth-host  : br-mgmt에 꽂힌 쪽
+# veth-neutron: Neutron(외부망)에 넘겨주는 쪽, veth-neutron.service가 생성
+
+- name: veth-host link | get
+  ansible.builtin.command: ip -o link show veth-host
+  register: veth
+  changed_when: false
+  failed_when: false       # 인터페이스가 없으면 rc≠0 → 여기서 실패 처리하지 않고 아래 assert가 판단
+
+- name: veth-host link | assert port of br-mgmt
+  ansible.builtin.assert:
+    that:
+      - veth.rc == 0
+      - "'master br-mgmt' in veth.stdout"
+    success_msg: "veth-host → br-mgmt"
+    fail_msg: "veth-host 상태: {{ veth.stdout | default(veth.stderr) }}"
+
+- name: veth-neutron service | get status
+  ansible.builtin.command: systemctl is-active veth-neutron.service
+  register: veth_svc
+  changed_when: false
+  failed_when: false       # inactive면 rc≠0
+
+- name: veth-neutron service | assert active
+  ansible.builtin.assert:
+    that:
+      - veth_svc.stdout == 'active'
+    fail_msg: "veth-neutron.service = {{ veth_svc.stdout }}"
+
+- name: NetworkManager devices | get state
+  ansible.builtin.command: nmcli -t -f DEVICE,STATE device
+  register: nm_dev
+  changed_when: false
+
+- name: NetworkManager devices | assert veth unmanaged
+  ansible.builtin.assert:
+    that:
+      - "'veth-host:unmanaged' in nm_dev.stdout_lines"
+      - "'veth-neutron:unmanaged' in nm_dev.stdout_lines"
+    fail_msg: "{{ nm_dev.stdout_lines | select('match', '^veth') | list }}"

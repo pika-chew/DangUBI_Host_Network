@@ -1,0 +1,18 @@
+---
+# mgmt_if는 group_vars에서 노드 종류별로 정함
+#   controllers → br-mgmt (브리지)
+#   computes    → enp3s0  (물리 NIC 직결)
+
+- name: "{{ mgmt_if }} address | get"
+  ansible.builtin.command: ip -4 -o addr show {{ mgmt_if }}
+  register: mgmt_addr      # 결과(stdout, stdout_lines, rc …)를 변수에 저장
+  changed_when: false      # 조회 명령이므로 CHANGED 대신 ok로 보고
+
+- name: "{{ mgmt_if }} address | assert has kolla mgmt IP & ext IP"
+  ansible.builtin.assert:
+    that:
+      # ~ 는 Jinja2 문자열 이어붙이기: '10.10.0.11' ~ '/' ~ 24 → '10.10.0.11/24'
+      - (mgmt_ip ~ '/' ~ net_prefix) in mgmt_addr.stdout
+      - (ext_ip ~ '/' ~ net_prefix) in mgmt_addr.stdout
+    success_msg: "{{ mgmt_if }} = {{ mgmt_ip }}, {{ ext_ip }}"
+    fail_msg: "{{ mgmt_if }} 실제 주소: {{ mgmt_addr.stdout_lines }}"

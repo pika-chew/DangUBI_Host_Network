@@ -1,0 +1,7 @@
+---
+- name: Check default route is via Wi-Fi
+  ansible.builtin.assert:
+    that:
+      - ansible_default_ipv4.interface == uplink_if
+    success_msg: "기본 경로 = {{ uplink_if }}"
+    fail_msg: "기본 경로 인터페이스 = {{ ansible_default_ipv4.interface | default('없음') }}"
