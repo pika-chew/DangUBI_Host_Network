@@ -1,0 +1,23 @@
+---
+# 호스트 기본 설정 (이미 손으로 구성된 상태를 코드로 표현)
+# --check --diff 결과 changed=0 이 정상.
+# import_tasks 는 플레이북 파싱 시점에 펼쳐지므로 --list-tasks 에 모든 태스크가 보인다.
+# controllers 전용 항목은 각 파일 안에서 group_vars 플래그(base_lid_switch_ignore, base_ip_forward)로 거른다.
+
+- name: Hostname
+  ansible.builtin.import_tasks: hostname.yml
+
+- name: /etc/hosts
+  ansible.builtin.import_tasks: hosts_file.yml
+
+- name: Power (sleep targets, lid switch)
+  ansible.builtin.import_tasks: power.yml
+
+- name: Firewall (ufw)
+  ansible.builtin.import_tasks: firewall.yml
+
+- name: IP forwarding
+  ansible.builtin.import_tasks: sysctl.yml
+
+- name: Time sync (chrony)
+  ansible.builtin.import_tasks: chrony.yml
