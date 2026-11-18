@@ -48,6 +48,7 @@ SSH 접속 주소(`ansible_host`)와 계정(`ansible_user`)은 커밋하지 않�
 .
 ├── README.md
 ├── .gitignore                      # hosts.yml, vault 비밀번호 파일 제외
+├── .claude/skills/readme-sync/     # Claude Code 스킬: 푸시 전에 변경 사항을 README에 반영
 ├── docs/images/                    # README 이미지
 └── ansible/
     ├── ansible.cfg                 # 인벤토리·roles 경로, sudo, SSH 설정
