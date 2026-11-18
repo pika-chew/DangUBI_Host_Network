@@ -11,13 +11,14 @@ description: 이 저장소에서 git push(푸시)하기 직전에, 푸시될 변
 
 ```bash
 git fetch -q origin
-git log --oneline origin/main..HEAD          # 푸시될 커밋
-git diff --stat origin/main...HEAD            # 푸시될 파일 변경
-git diff --name-status origin/main...HEAD     # 추가(A)·삭제(D)·이름변경(R)
+BASE=origin/develop                           # 작업 브랜치의 PR 대상 브랜치
+git log --oneline $BASE..HEAD                 # 푸시될 커밋
+git diff --stat $BASE...HEAD                  # 푸시될 파일 변경
+git diff --name-status $BASE...HEAD           # 추가(A)·삭제(D)·이름변경(R)
 git status --short                            # 아직 커밋 안 된 변경 (이번에 함께 커밋할 것)
 ```
 
-업스트림이 없으면 `origin/main` 대신 리모트 기본 브랜치를 기준으로 한다.
+기준은 PR 대상 브랜치다. 작업 브랜치는 `origin/develop`, develop → main 반영이면 `origin/main`을 쓴다.
 
 ## 2. 변경 → README 섹션 매핑
 
