@@ -9,7 +9,6 @@
   hosts: all
   gather_facts: true        # facts 수집 → ansible_default_ipv4 같은 변수가 생김
   check_mode: false         # --check로 돌려도 이 플레이의 조회는 실제로 실행 (읽기 전용이라 안전)
-  ignore_errors: true       # assert가 실패해도 그 호스트를 멈추지 않고 다음 점검 계속
   tasks:
     - name: 기본 경로가 Wi-Fi인가
       ansible.builtin.assert:
@@ -25,7 +24,6 @@
   hosts: controllers
   gather_facts: false       # 플레이 1에서 이미 수집함 (facts는 같은 실행 안에서 유지)
   check_mode: false
-  ignore_errors: true
   tasks:
     # --- br-mgmt 주소 ---
     - name: show br-mgmt addr
@@ -115,7 +113,7 @@
       changed_when: false
       failed_when: false
  
-    - name: MASQUERADE is OK(exec or save)
+    - name: MASQUERADE is OK(exec and save)
       ansible.builtin.assert:
         that:
           - masq.rc == 0
@@ -129,7 +127,6 @@
   hosts: computes
   gather_facts: false
   check_mode: false
-  ignore_errors: true
   vars:
     mgmt_if: enp3s0          # 이 플레이 안에서만 쓰는 변수
   tasks:
