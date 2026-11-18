@@ -1,14 +1,11 @@
 ---
 # 호스트 네트워크 현재 상태 점검 (읽기 전용)
-# 실행: ansible-playbook playbooks/verify.yml        (ansible/ 디렉터리에서)
-#
-# 아무것도 바꾸지 않는다. 실패한 assert = "지금 상태가 설계와 다른 곳".
-# 마지막 PLAY RECAP의 ignored 숫자가 불일치 개수다.
+# 실행: ansible-playbook playbooks/verify.yml
  
 # ─────────────────────────────────────────────
-# 플레이 1: 전 노드 공통
+# play 1: all node
 # ─────────────────────────────────────────────
-- name: 공통 점검 (전 노드)
+- name: common verify(all node)
   hosts: all
   gather_facts: true        # facts 수집 → ansible_default_ipv4 같은 변수가 생김
   check_mode: false         # --check로 돌려도 이 플레이의 조회는 실제로 실행 (읽기 전용이라 안전)
@@ -22,21 +19,21 @@
         fail_msg: "기본 경로 인터페이스 = {{ ansible_default_ipv4.interface | default('없음') }}"
  
 # ─────────────────────────────────────────────
-# 플레이 2: 컨트롤러(노트북) — 브리지·veth·NAT
+# play 2: controller node — bridge·veth·NAT
 # ─────────────────────────────────────────────
-- name: 컨트롤러 점검
+- name: control node verify
   hosts: controllers
   gather_facts: false       # 플레이 1에서 이미 수집함 (facts는 같은 실행 안에서 유지)
   check_mode: false
   ignore_errors: true
   tasks:
     # --- br-mgmt 주소 ---
-    - name: br-mgmt 주소 조회
+    - name: show br-mgmt addr
       ansible.builtin.command: ip -4 -o addr show br-mgmt
       register: br_addr      # 결과(stdout, stdout_lines, rc …)를 변수에 저장
       changed_when: false    # 조회 명령이므로 CHANGED 대신 ok로 보고
  
-    - name: br-mgmt에 관리 IP와 외부망 주소가 있는가
+    - name: check kolla management IP & ext IP are in br-mgmt
       ansible.builtin.assert:
         that:
           # ~ 는 Jinja2 문자열 이어붙이기: '10.10.0.11' ~ '/' ~ 24 → '10.10.0.11/24'
@@ -45,19 +42,19 @@
         success_msg: "br-mgmt = {{ mgmt_ip }}, {{ ext_ip }}"
         fail_msg: "br-mgmt 실제 주소: {{ br_addr.stdout_lines }}"
  
-    - name: NAT VIP 보유 여부 (정보 표시만)
+    - name: exist NAT VIP
       ansible.builtin.debug:
         msg: "{{ nat_vip }} 보유 중"
       when: (nat_vip ~ '/') in br_addr.stdout    # 조건이 참인 호스트에서만 실행
  
     # --- veth ---
-    - name: veth-host 링크 조회
+    - name: check veth-host link
       ansible.builtin.command: ip -o link show veth-host
       register: veth
       changed_when: false
       failed_when: false     # 인터페이스가 없으면 rc≠0 → 여기서 실패 처리하지 않고 아래 assert가 판단
  
-    - name: veth-host가 br-mgmt 포트인가
+    - name: check veth-host is port of br-mgmt
       ansible.builtin.assert:
         that:
           - veth.rc == 0
@@ -65,24 +62,24 @@
         success_msg: "veth-host → br-mgmt"
         fail_msg: "veth-host 상태: {{ veth.stdout | default(veth.stderr) }}"
  
-    - name: veth-neutron 서비스 상태 조회
+    - name: check veth-neutron service status 
       ansible.builtin.command: systemctl is-active veth-neutron.service
       register: veth_svc
       changed_when: false
       failed_when: false     # inactive면 rc≠0
  
-    - name: veth-neutron 서비스가 active인가
+    - name: check veth-neutron service is active
       ansible.builtin.assert:
         that:
           - veth_svc.stdout == 'active'
         fail_msg: "veth-neutron.service = {{ veth_svc.stdout }}"
  
-    - name: NetworkManager 장치 목록 조회
+    - name: show NetworkManager device list
       ansible.builtin.command: nmcli -t -f DEVICE,STATE device
       register: nm_dev
       changed_when: false
  
-    - name: NetworkManager가 veth를 관리하지 않는가
+    - name: check NetworkManager control veth
       ansible.builtin.assert:
         that:
           - "'veth-host:unmanaged' in nm_dev.stdout_lines"
@@ -90,18 +87,18 @@
         fail_msg: "{{ nm_dev.stdout_lines | select('match', '^veth') | list }}"
  
     # --- 포워딩·NAT ---
-    - name: ip_forward 조회
+    - name: checks if the server can pass IPv4 traffic from one network to another
       ansible.builtin.command: sysctl -n net.ipv4.ip_forward
       register: ipf
       changed_when: false
  
-    - name: IP 포워딩이 켜져 있는가
+    - name: check turn on IP forwarding
       ansible.builtin.assert:
         that:
           - ipf.stdout == '1'
         fail_msg: "net.ipv4.ip_forward = {{ ipf.stdout }}"
  
-    - name: MASQUERADE 규칙 존재 확인 (실행 중 규칙)
+    - name: exist MASQUERADE rule
       # iptables -C: 규칙이 있으면 rc=0, 없으면 rc=1 (조회만 하고 바꾸지 않음)
       ansible.builtin.command: >-
         iptables -t nat -C POSTROUTING -s {{ ext_cidr }} -o {{ uplink_if }} -j MASQUERADE
@@ -109,7 +106,7 @@
       changed_when: false
       failed_when: false
  
-    - name: MASQUERADE 규칙이 저장 파일에도 있는가 (재부팅 후 유지)
+    - name: exist MASQUERADE rule in save file(keep it after reboot)
       # iptables-persistent는 부팅 시 /etc/iptables/rules.v4를 읽어 규칙을 복원함
       ansible.builtin.command: >-
         grep -qF -- "-A POSTROUTING -s {{ ext_cidr }} -o {{ uplink_if }} -j MASQUERADE"
@@ -118,7 +115,7 @@
       changed_when: false
       failed_when: false
  
-    - name: MASQUERADE 실행 중·저장 모두 OK인가
+    - name: MASQUERADE is OK(exec or save)
       ansible.builtin.assert:
         that:
           - masq.rc == 0
@@ -126,9 +123,9 @@
         fail_msg: "실행 중 rc={{ masq.rc }}, 저장 파일 rc={{ masq_saved.rc }} (0이 아닌 쪽이 없음)"
  
 # ─────────────────────────────────────────────
-# 플레이 3: 컴퓨트(PC) — enp3s0에 주소만 직접
+# play 3: compute(PC) — enp3s0 directly
 # ─────────────────────────────────────────────
-- name: 컴퓨트 점검
+- name: compute node verify
   hosts: computes
   gather_facts: false
   check_mode: false
@@ -136,12 +133,12 @@
   vars:
     mgmt_if: enp3s0          # 이 플레이 안에서만 쓰는 변수
   tasks:
-    - name: "{{ mgmt_if }} 주소 조회"
+    - name: "{{ mgmt_if }} address"
       ansible.builtin.command: ip -4 -o addr show {{ mgmt_if }}
       register: if_addr
       changed_when: false
  
-    - name: "{{ mgmt_if }}에 관리 IP와 외부망 주소가 있는가"
+    - name: "check kolla management IP & ext IP are in {{ mgmt_if }}"
       ansible.builtin.assert:
         that:
           - (mgmt_ip ~ '/' ~ net_prefix) in if_addr.stdout
