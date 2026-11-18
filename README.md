@@ -18,7 +18,7 @@ OpenStack(kolla-ansible) 멀티노드 배포 전에 필요한 **호스트 네트
 | os-ctl3 | controllers | 노트북 | 10.10.0.13 | 10.20.0.4 | `br-mgmt` (브리지) |
 | os-cmp1 | computes | PC | 10.10.0.14 | 10.20.0.5 | `enp3s0` (물리 NIC) |
 
-SSH 접속 주소(`ansible_host`)와 계정은 [`ansible/inventory/hosts.yml`](ansible/inventory/hosts.yml)에 있습니다.
+SSH 접속 주소(`ansible_host`)와 계정(`ansible_user`)은 커밋하지 않고 각자 로컬의 `ansible/inventory/hosts.yml`에 둡니다. 저장소에는 템플릿 [`hosts.example.yml`](ansible/inventory/hosts.example.yml)만 있습니다.
 
 ### 네트워크
 
@@ -47,11 +47,13 @@ SSH 접속 주소(`ansible_host`)와 계정은 [`ansible/inventory/hosts.yml`](a
 ```
 .
 ├── README.md
+├── .gitignore                      # hosts.yml, vault 비밀번호 파일 제외
 ├── docs/images/                    # README 이미지
 └── ansible/
     ├── ansible.cfg                 # 인벤토리·roles 경로, sudo, SSH 설정
     ├── inventory/
-    │   ├── hosts.yml               # 호스트 목록과 호스트별 IP (controllers / computes 그룹)
+    │   ├── hosts.example.yml       # 인벤토리 템플릿 (controllers / computes 그룹, 호스트별 IP)
+    │   ├── hosts.yml               # 실제 인벤토리. 템플릿을 복사해 만듦 (커밋 제외)
     │   └── group_vars/
     │       ├── all.yml             # 공통: uplink_if, ext_cidr, nat_vip, net_prefix
     │       ├── controllers.yml     # mgmt_if: br-mgmt
@@ -79,10 +81,14 @@ cd ansible
 
 ### 실행 전 준비
 
-1. 작업자 PC와 모든 노드가 Tailscale에 연결되어 있어야 합니다.
-2. 각 노드 계정에 SSH 키로 로그인할 수 있어야 합니다. (`ssh-copy-id <user>@<ansible_host>`)
-3. `host_key_checking = True`이므로 각 노드에 한 번 `ssh`로 접속해 known_hosts에 등록합니다.
-4. 실행하면 처음에 `BECOME password:`(sudo 비밀번호)를 한 번 묻습니다. 이 값을 모든 노드에 똑같이 사용합니다.
+1. 인벤토리 템플릿을 복사하고 `<tailscale-ip>`, `<ssh-user>`를 실제 값으로 채웁니다.
+   ```bash
+   cp inventory/hosts.example.yml inventory/hosts.yml
+   ```
+2. 작업자 PC와 모든 노드가 Tailscale에 연결되어 있어야 합니다.
+3. 각 노드 계정에 SSH 키로 로그인할 수 있어야 합니다. (`ssh-copy-id <user>@<ansible_host>`)
+4. `host_key_checking = True`이므로 각 노드에 한 번 `ssh`로 접속해 known_hosts에 등록합니다.
+5. 실행하면 처음에 `BECOME password:`(sudo 비밀번호)를 한 번 묻습니다. 이 값을 모든 노드에 똑같이 사용합니다.
 
 ### 인벤토리 확인
 

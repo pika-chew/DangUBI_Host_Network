@@ -1,0 +1,31 @@
+---
+# 인벤토리 템플릿
+# 사용법: cp hosts.example.yml hosts.yml 후 <...> 값을 실제 값으로 채운다.
+# hosts.yml은 접속 정보가 들어가므로 .gitignore로 커밋에서 제외된다.
+
+all:
+  children:
+    controllers:
+      hosts:
+        os-ctl1:
+          ansible_host: <tailscale-ip>   # SSH 접속 주소 (Tailscale IP)
+          ansible_user: <ssh-user>       # 이 호스트에 SSH 접속할 계정
+          mgmt_ip: 10.10.0.11
+          ext_ip: 10.20.0.2
+        os-ctl2:
+          ansible_host: <tailscale-ip>
+          ansible_user: <ssh-user>
+          mgmt_ip: 10.10.0.12
+          ext_ip: 10.20.0.3
+        os-ctl3:
+          ansible_host: <tailscale-ip>
+          ansible_user: <ssh-user>
+          mgmt_ip: 10.10.0.13
+          ext_ip: 10.20.0.4
+    computes:
+      hosts:
+        os-cmp1:
+          ansible_host: <tailscale-ip>
+          ansible_user: <ssh-user>
+          mgmt_ip: 10.10.0.14
+          ext_ip: 10.20.0.5

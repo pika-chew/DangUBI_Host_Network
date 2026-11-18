@@ -1,0 +1,6 @@
+# 접속 정보(Tailscale IP, SSH 계정)가 들어가는 실제 인벤토리
+# 템플릿은 ansible/inventory/hosts.example.yml
+ansible/inventory/hosts.yml
+
+# Ansible Vault 비밀번호 파일
+.vault_pass*
