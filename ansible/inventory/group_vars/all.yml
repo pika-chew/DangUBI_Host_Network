@@ -7,3 +7,4 @@ uplink_if: wlo1            # 인터넷(기본 경로) 인터페이스
 ext_cidr: 10.20.0.0/24     # 외부망 대역 (MASQUERADE 출발지)
 nat_vip: 10.20.0.1         # NAT 게이트웨이 VIP
 net_prefix: 24             # 관리망·외부망 프리픽스 길이
+mgmt_cidr: 10.10.0.0/24    # 관리망 대역 (chrony 클러스터 서버 allow 대상)
