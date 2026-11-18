@@ -1,0 +1,17 @@
+---
+# IP 포워딩 (controllers 만, base_ip_forward=true)
+# computes 는 포워딩이 필요 없지만, 지금 켜져 있더라도 끄지 않는다 → false 면 아무것도 하지 않음.
+
+# 왜: 컨트롤러는 외부망(ext_cidr) 트래픽을 uplink_if 로 NAT 해서 내보내는 게이트웨이다.
+# 포워딩이 꺼지면 VM·외부망에서 인터넷으로 나가는 트래픽이 모두 끊긴다.
+# sysctl_file 을 기존 파일(99-forward.conf)과 같게 지정해 새 파일이 생기지 않게 한다.
+# 모듈은 "키 = 값" 공백 차이를 무시하고 값으로 비교하므로, 값이 같으면 파일을 다시 쓰지 않는다.
+# check 모드: 실행 중 값과 파일을 비교만 하고 sysctl -p 는 실행하지 않는다.
+- name: net.ipv4.ip_forward | 1 and persisted
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_file: "{{ base_ip_forward_file }}"
+    sysctl_set: true
+    state: present
+  when: base_ip_forward
