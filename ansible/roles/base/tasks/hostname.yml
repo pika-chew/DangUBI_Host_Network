@@ -1,10 +1,4 @@
 ---
-# 호스트명 = inventory_hostname (os-ctl1 등)
-# Kolla 배포 후에는 호스트명이 RabbitMQ 노드 이름 등에 박혀 있어 바꾸면 클러스터가 깨진다.
-# 그래서 기본은 "확인만 하고 다르면 실패", 실제 변경은 base_allow_hostname_change=true 일 때만.
-
-# 왜: 다른 이름으로 운영 중인 노드를 모르고 지나치면 /etc/hosts·chrony 설정이 엉뚱한 이름 기준으로 들어간다.
-# ansible_hostname 은 gather_facts 로 수집한 짧은 호스트명.
 - name: hostname | assert matches inventory name
   ansible.builtin.assert:
     that:
@@ -16,8 +10,6 @@
       정말 바꿔야 하면 -e base_allow_hostname_change=true 로 실행하세요.
   when: not base_allow_hostname_change
 
-# 왜: 명시적으로 허용한 경우에만 호스트명을 맞춘다. (재배포 전 초기 구성용)
-# check 모드에서는 바뀔지 여부만 보고하고 실제로 바꾸지 않는다.
 - name: hostname | set to inventory name (explicitly allowed only)
   ansible.builtin.hostname:
     name: "{{ inventory_hostname }}"

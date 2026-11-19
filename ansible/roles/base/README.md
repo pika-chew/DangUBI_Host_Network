@@ -85,6 +85,46 @@ ufw는 iptables 규칙을 자체적으로 덮어씁니다. 그래서 켜져 있�
   - `sources.d` 변경 → `chronyc reload sources`. 서비스 중단이 없습니다.
   - `conf.d` 변경 → chrony 재시작. `allow`·`local` 설정은 재시작해야 반영되며, chrony 재시작은 안전합니다.
 
+## 동작 상세
+
+태스크 파일에서 옮겨 온 설명입니다.
+
+### 공통
+- `tasks/main.yml`은 `import_tasks`를 씁니다. 플레이북을 읽을 때 펼쳐지므로 `--list-tasks`에 모든 태스크가 보입니다.
+- controllers 전용 항목은 `when: 'controllers' in group_names` 대신 group_vars 플래그(`base_lid_switch_ignore`, `base_ip_forward`)로 거릅니다.
+
+### hostname.yml
+- 비교 대상인 `ansible_hostname`은 `gather_facts`로 수집한 짧은 호스트명입니다.
+- 다른 이름으로 운영 중인 노드를 놓치면 `/etc/hosts`·chrony 설정이 엉뚱한 이름을 기준으로 들어갑니다. 그래서 다르면 바로 실패시킵니다.
+- 변경 태스크는 check 모드에서는 바뀔지 여부만 보고하고 실제로 바꾸지 않습니다.
+
+### hosts_file.yml
+- `slurp`로 현재 파일 전체를 읽습니다. 중복·충돌·누락을 판단하려면 전체 내용이 필요하기 때문입니다. 읽기만 하므로 check 모드에서도 실행됩니다.
+- 판단할 때 주석·빈 줄은 뺍니다. `127.0.1.1` 줄은 어차피 지울 것이라 충돌 판단에서도 뺍니다.
+- 충돌: 호스트명이 `mgmt_ip`가 아닌 다른 IP로도 매핑돼 있으면, 어느 쪽이 맞는지 코드가 판단할 수 없어서 실패합니다. 그냥 두면 잘못된 줄이 남아 있어도 정상으로 보이고, `getent` 결과가 노드마다 달라질 수 있습니다.
+- 중복: 같은 매핑이 두 줄 이상이면 동작에는 문제가 없으므로 실패시키지 않고 보고만 합니다.
+- 추가: `lineinfile`에 `regexp` 없이 `line`만 주면, 정확히 같은 줄이 없을 때 파일 끝에 추가만 합니다. 다른 줄은 건드리지 않습니다. 다른 형식(별칭 포함 등)으로 이미 매핑돼 있으면 `when`으로 건너뜁니다.
+
+### power.yml
+- target을 mask하면 전원 버튼, 유휴 타이머, GUI 등 어떤 경로로도 해당 target에 들어가지 못합니다.
+- Ubuntu 기본 설치에는 `/etc/systemd/logind.conf.d/` 디렉터리가 없을 수 있어서 먼저 만듭니다.
+- drop-in이 `logind.conf`보다 우선 적용됩니다. 관리하는 값은 drop-in으로 분리합니다.
+- check 모드에서는 디렉터리를 실제로 만들지 않습니다. 그래서 디렉터리가 아직 없으면 drop-in copy가 "디렉터리 없음"으로 실패하므로 그 경우 건너뜁니다. 변경 예정이라는 것은 디렉터리 태스크의 `changed`로 알 수 있습니다.
+- 지금은 `logind.conf`에 같은 값이 있으므로 실제 동작은 이미 `ignore`일 가능성이 높습니다. `verify.yml`이 logind의 실행 중 값을 확인합니다.
+
+### firewall.yml
+- ufw가 설치되지 않은 노드에서 ufw 모듈을 부르면 "ufw 명령 없음"으로 실패합니다. 그래서 `package_facts`로 설치 여부를 먼저 봅니다. 조회만 하므로 check 모드에서도 실행됩니다.
+- 이미 inactive면 변경 없음(ok)입니다. check 모드에서는 상태만 비교합니다.
+
+### sysctl.yml
+- 모듈은 `키 = 값`의 공백 차이를 무시하고 값으로 비교합니다. 값이 같으면 파일을 다시 쓰지 않습니다.
+- check 모드에서는 실행 중 값과 파일을 비교만 하고 `sysctl -p`는 실행하지 않습니다.
+
+### chrony.yml
+- Ubuntu 기본 `/etc/chrony/chrony.conf`가 `sourcedir /etc/chrony/sources.d`와 `confdir /etc/chrony/conf.d`를 읽습니다. 그래서 이 두 디렉터리에 파일을 둡니다.
+- `kr.sources`는 기본 Ubuntu pool 대신 국내에서 응답이 빠른 서버를 쓰기 위한 파일입니다.
+- handler의 `chronyc reload sources`는 command 모듈이라 check 모드에서는 실행되지 않습니다.
+
 ## 변수
 
 | 변수 | 기본값 | 덮어쓰는 곳 | 설명 |

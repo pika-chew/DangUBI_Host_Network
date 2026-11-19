@@ -1,20 +1,12 @@
 ---
-# 절전 비활성화
-#  - 전체: sleep/suspend/hibernate/hybrid-sleep target mask
-#  - controllers(노트북): 덮개를 닫아도 절전하지 않게 logind drop-in
-#
-# 🚨 systemd-logind 를 restart/reload 하는 handler·태스크를 만들지 않는다.
-#    logind 재시작 시 데스크톱 세션이 종료되는 사고가 실제로 있었다. 적용은 재부팅으로만 한다.
+# 🚨 systemd-logind 를 restart/reload 하는 태스크·handler 를 만들지 않는다 (데스크톱 세션 종료 사고). 적용은 재부팅으로만.
 
-# 왜: 노드가 절전에 들어가면 OpenStack 서비스·VM·Ceph 등이 통째로 클러스터에서 빠진다.
-# mask 하면 어떤 경로(전원 버튼, 유휴 타이머, GUI)로도 해당 target 에 진입하지 못한다.
 - name: sleep targets | masked
   ansible.builtin.systemd_service:
     name: "{{ item }}"
     masked: true
   loop: "{{ base_sleep_targets }}"
 
-# 왜: drop-in 파일을 둘 디렉터리. Ubuntu 기본 설치에는 없을 수 있다.
 - name: logind drop-in directory | exists
   ansible.builtin.file:
     path: "{{ base_logind_dropin_path | dirname }}"
@@ -25,11 +17,7 @@
   register: base_logind_dir
   when: base_lid_switch_ignore
 
-# 왜: 노트북 덮개를 닫으면 기본 동작이 suspend 라 노드가 멈춘다.
-# 기존 /etc/systemd/logind.conf 끝에도 같은 값이 수동으로 추가돼 있으나 값이 같으므로 건드리지 않고,
-# 관리용 값은 drop-in 으로 분리한다. (drop-in 이 logind.conf 보다 우선 적용됨)
-# check 모드: 위 디렉터리가 아직 없으면 실제로 만들지 않으므로 copy 가 "디렉터리 없음"으로 실패한다.
-#            그 경우 이 태스크는 건너뛰고, 위 디렉터리 태스크의 changed 로 변경 예정임을 알 수 있다.
+# ⚠️ check 모드에서 디렉터리가 아직 없으면 copy 가 실패하므로 건너뛴다 (아래 when 두 번째 조건)
 - name: logind drop-in | lid switch is ignored
   ansible.builtin.copy:
     dest: "{{ base_logind_dropin_path }}"
@@ -47,8 +35,6 @@
     - base_lid_switch_ignore
     - not (ansible_check_mode and base_logind_dir is changed)
 
-# 왜: logind 는 재시작하지 않으므로 파일이 바뀌어도 바로 반영되지 않는다. 사람이 알 수 있게 안내만 한다.
-# (지금은 logind.conf 에 같은 값이 있어 실제 동작은 이미 ignore 일 가능성이 높다 → verify.yml 로 확인)
 - name: logind drop-in | notify reboot required
   ansible.builtin.debug:
     msg: "logind drop-in 이 변경되었습니다. 재부팅해야 적용됩니다. (systemd-logind 재시작 금지)"
