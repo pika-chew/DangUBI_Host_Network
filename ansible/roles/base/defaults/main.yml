@@ -1,6 +1,5 @@
 ---
 # base role 기본값
-# 그룹별로 다른 값은 inventory/group_vars/controllers.yml, computes.yml 에서 덮어쓴다.
 # 목표: 이미 손으로 구성된 노드의 "현재 상태"를 그대로 표현 → --check --diff 결과 changed=0
 
 # ── hostname ─────────────────────────────────────────────
@@ -27,8 +26,9 @@ base_ip_forward: false
 base_ip_forward_file: /etc/sysctl.d/99-forward.conf   # 기존 파일 이름과 같아야 새 파일이 생기지 않음
 
 # ── chrony ──────────────────────────────────────────────
-# 각 플래그가 false 면 해당 파일을 "관리하지 않음"(만들지도, 지우지도 않음).
+# 각 플래그가 false 면 해당 파일을 관리하지 않음
 # ⚠️ 기본값과 파일 내용은 현재 노드 상태 수집 결과로 확정해야 한다. (PR 설명 참고)
+# 어떤 서버를 기준으로 비교할 것인가
 chrony_kr_sources: true
 chrony_kr_sources_path: /etc/chrony/sources.d/kr.sources
 chrony_kr_sources_content: |
