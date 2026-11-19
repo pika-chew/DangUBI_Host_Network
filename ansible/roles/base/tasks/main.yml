@@ -1,0 +1,24 @@
+---
+- name: Hostname
+  ansible.builtin.import_tasks: hostname.yml
+  tags: hostname
+
+- name: /etc/hosts
+  ansible.builtin.import_tasks: hosts_file.yml
+  tags: hosts
+
+- name: Power (sleep targets, lid switch)
+  ansible.builtin.import_tasks: power.yml
+  tags: power
+
+- name: Firewall (ufw)
+  ansible.builtin.import_tasks: firewall.yml
+  tags: firewall
+
+- name: IP forwarding
+  ansible.builtin.import_tasks: sysctl.yml
+  tags: sysctl
+
+- name: Time sync (chrony)
+  ansible.builtin.import_tasks: chrony.yml
+  tags: chrony

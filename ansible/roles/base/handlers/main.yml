@@ -1,0 +1,11 @@
+---
+# 🚨 systemd-logind, NetworkManager, docker 재시작 handler 를 만들지 않는다. (이유: ../README.md)
+
+- name: Reload chrony sources
+  ansible.builtin.command: chronyc reload sources
+  changed_when: true
+
+- name: Restart chrony
+  ansible.builtin.systemd_service:
+    name: chrony
+    state: restarted

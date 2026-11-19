@@ -1,3 +1,7 @@
 ---
 # computes 그룹 전용 변수
 mgmt_if: enp3s0            # 관리망·외부망 IP가 붙는 인터페이스 (물리 NIC 직결)
+
+# base role
+base_lid_switch_ignore: false  # PC라 덮개 없음
+base_ip_forward: false         # 포워딩 불필요. 지금 켜져 있어도 끄지 않음(관리 대상 아님)

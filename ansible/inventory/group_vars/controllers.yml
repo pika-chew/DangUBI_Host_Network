@@ -1,3 +1,7 @@
 ---
 # controllers 그룹 전용 변수
 mgmt_if: br-mgmt           # 관리망·외부망 IP가 붙는 인터페이스 (브리지)
+
+# base role
+base_lid_switch_ignore: true   # 노트북이라 덮개를 닫아도 절전하지 않게
+base_ip_forward: true          # 외부망 NAT 게이트웨이 역할 → 포워딩 필요

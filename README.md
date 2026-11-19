@@ -48,7 +48,9 @@ SSH 접속 주소(`ansible_host`)와 계정(`ansible_user`)은 커밋하지 않�
 .
 ├── README.md
 ├── .gitignore                      # hosts.yml, vault 비밀번호 파일 제외
-├── .claude/skills/readme-sync/     # Claude Code 스킬: 푸시 전에 변경 사항을 README에 반영
+├── .claude/skills/
+│   ├── readme-sync/                # Claude Code 스킬: 푸시 전에 변경 사항을 README에 반영
+│   └── git-workflow/               # Claude Code 스킬: develop 파생 브랜치 → 작은 커밋 → PR → Codex 리뷰 검토
 ├── docs/images/                    # README 이미지
 └── ansible/
     ├── ansible.cfg                 # 인벤토리·roles 경로, sudo, SSH 설정
@@ -56,12 +58,26 @@ SSH 접속 주소(`ansible_host`)와 계정(`ansible_user`)은 커밋하지 않�
     │   ├── hosts.example.yml       # 인벤토리 템플릿 (controllers / computes 그룹, 호스트별 IP)
     │   ├── hosts.yml               # 실제 인벤토리. 템플릿을 복사해 만듦 (커밋 제외)
     │   └── group_vars/
-    │       ├── all.yml             # 공통: uplink_if, ext_cidr, nat_vip, net_prefix
-    │       ├── controllers.yml     # mgmt_if: br-mgmt
-    │       └── computes.yml        # mgmt_if: enp3s0
+    │       ├── all.yml             # 공통: uplink_if, ext_cidr, nat_vip, net_prefix, mgmt_cidr
+    │       ├── controllers.yml     # mgmt_if: br-mgmt, 덮개 절전 무시·IP 포워딩 켬
+    │       └── computes.yml        # mgmt_if: enp3s0, 덮개·포워딩 관리 안 함
     ├── playbooks/
-    │   └── verify.yml              # 네트워크 상태 점검 (읽기 전용)
+    │   ├── base.yml                # 호스트 기본 설정 적용 (base role)
+    │   └── verify.yml              # 네트워크·기본 설정 상태 점검 (읽기 전용)
     └── roles/
+        ├── base/                   # 호스트 기본 설정 (현재 수동 구성 상태를 코드로 표현)
+        │   ├── README.md           # 항목별 설명, 변수, 하지 않는 것과 이유
+        │   ├── defaults/main.yml   # 기본 변수 (절전 target, chrony 파일 내용·켜기 여부 등)
+        │   ├── handlers/main.yml   # chrony reload/restart (logind 재시작 handler 없음)
+        │   └── tasks/
+        │       ├── main.yml        # 아래 파일을 순서대로 import
+        │       ├── hostname.yml    # 호스트명 = inventory_hostname 확인 (다르면 실패)
+        │       ├── hosts_file.yml  # /etc/hosts: 127.0.1.1 제거, 누락된 mgmt_ip 매핑만 추가
+        │       ├── power.yml       # 절전 target mask, 컨트롤러 덮개 절전 무시 drop-in
+        │       ├── firewall.yml    # ufw 비활성 (미설치 노드는 건너뜀)
+        │       ├── sysctl.yml      # 컨트롤러: net.ipv4.ip_forward=1 (99-forward.conf)
+        │       └── chrony.yml      # chrony 설치·실행, NTP 소스 파일
+        ├── verify_base/tasks/      # base 설정 점검: 호스트명·이름 해석, 절전, ufw, 포워딩 파일, chrony 동기화
         └── verify_network/tasks/
             ├── main.yml            # 점검 순서. 컨트롤러 전용 항목은 group_names로 선택
             ├── route.yml           # 전체: 기본 경로가 uplink_if인지
@@ -100,7 +116,21 @@ ansible-inventory --host os-ctl1          # 특정 호스트에 적용되는 변
 ansible all -m ping                       # 모든 노드 SSH·Python 연결 확인
 ```
 
-### 네트워크 점검 (verify)
+### 호스트 기본 설정 (base)
+
+이미 손으로 구성된 노드의 상태를 코드로 옮긴 것이라, **check 결과가 `changed=0`이어야 정상**입니다. 변경이 나오면 적용하지 말고 diff를 먼저 확인합니다.
+
+```bash
+ansible-playbook playbooks/base.yml --check --diff --limit os-ctl2   # VIP 없는 노드부터 미리보기
+ansible-playbook playbooks/base.yml --check --diff                   # 전체 미리보기
+ansible-playbook playbooks/base.yml                                  # 적용
+```
+
+- 호스트명이 인벤토리와 다르면 실패만 합니다. 실제 변경은 `-e base_allow_hostname_change=true`일 때만 합니다. (Kolla 배포 후 변경 위험)
+- 덮개 설정 drop-in이 바뀌어도 `systemd-logind`는 재시작하지 않습니다. 재부팅해야 적용됩니다.
+- 일부 항목만 실행하려면 `--tags hostname|hosts|power|firewall|sysctl|chrony`를 씁니다. 항목별 설명과 변수는 [roles/base/README.md](ansible/roles/base/README.md)에 있습니다.
+
+### 점검 (verify)
 
 ```bash
 ansible-playbook playbooks/verify.yml                         # 전체 노드 점검

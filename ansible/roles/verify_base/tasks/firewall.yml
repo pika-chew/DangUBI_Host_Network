@@ -1,0 +1,16 @@
+---
+# ufw 미설치면 command 모듈이 "No such file" 로 rc=2 → 통과로 본다
+- name: ufw | get status
+  ansible.builtin.command: ufw status
+  environment:
+    LC_ALL: C              # 한국어 로캘이면 "상태: 비활성"으로 출력돼 문자열 비교가 실패함
+  register: ufw
+  changed_when: false
+  failed_when: false
+
+- name: ufw | assert inactive or not installed
+  ansible.builtin.assert:
+    that:
+      - "ufw.rc == 2 or 'Status: inactive' in ufw.stdout"
+    success_msg: "{{ 'ufw 미설치' if ufw.rc == 2 else 'ufw inactive' }}"
+    fail_msg: "ufw 상태: {{ ufw.stdout | default(ufw.msg) }}"

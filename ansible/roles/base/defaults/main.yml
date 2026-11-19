@@ -1,0 +1,41 @@
+---
+# 변수 설명: ../README.md
+
+# ⚠️ true 는 Kolla 재배포 전제일 때만 (호스트명이 바뀌면 RabbitMQ 등이 깨짐)
+base_allow_hostname_change: false
+
+base_sleep_targets:
+  - sleep.target
+  - suspend.target
+  - hibernate.target
+  - hybrid-sleep.target
+
+base_lid_switch_ignore: false
+base_logind_dropin_path: /etc/systemd/logind.conf.d/lid-switch-ignore.conf
+
+base_ip_forward: false
+# ⚠️ 기존 파일 이름과 같아야 함 (다르면 새 파일이 생김)
+base_ip_forward_file: /etc/sysctl.d/99-forward.conf
+
+# ⚠️ 파일 내용은 현재 노드 파일과 글자 하나까지 같아야 함 (다르면 덮어씀)
+# 어떤 서버를 기준으로 비교할 것인가
+chrony_kr_sources: false
+chrony_kr_sources_path: /etc/chrony/sources.d/kr.sources
+chrony_kr_sources_content: |
+  server time.google.com iburst
+  server time.bora.net iburst
+  pool kr.pool.ntp.org iburst
+
+chrony_cluster: false
+chrony_cluster_server_host: os-ctl1
+chrony_cluster_server: "{{ chrony_cluster | bool and inventory_hostname == chrony_cluster_server_host }}"
+chrony_cluster_client: "{{ chrony_cluster | bool and inventory_hostname != chrony_cluster_server_host }}"
+
+chrony_cluster_server_path: /etc/chrony/conf.d/cluster.conf
+chrony_cluster_server_content: |
+  allow {{ mgmt_cidr }}
+  local stratum 10
+
+chrony_cluster_client_path: /etc/chrony/sources.d/cluster.sources
+chrony_cluster_client_content: |
+  server {{ hostvars[chrony_cluster_server_host].mgmt_ip }} iburst prefer

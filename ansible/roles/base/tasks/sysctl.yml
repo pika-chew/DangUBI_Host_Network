@@ -1,0 +1,9 @@
+---
+- name: net.ipv4.ip_forward | 1 and persisted
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_file: "{{ base_ip_forward_file }}"
+    sysctl_set: true
+    state: present
+  when: base_ip_forward

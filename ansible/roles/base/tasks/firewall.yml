@@ -1,0 +1,9 @@
+---
+- name: ufw | gather installed packages
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: ufw | disabled
+  community.general.ufw:
+    state: disabled
+  when: "'ufw' in ansible_facts.packages"

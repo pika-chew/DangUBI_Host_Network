@@ -1,7 +1,7 @@
 ---
-# 호스트 네트워크 현재 상태 점검 (읽기 전용)
+# 호스트 현재 상태 점검 (읽기 전용)
 # 실행: ansible-playbook playbooks/verify.yml
-# 점검 내용은 roles/verify_network/tasks/ 아래 파일별로 나뉘어 있음
+# 점검 내용은 roles/verify_network/tasks/, roles/verify_base/tasks/ 아래 파일별로 나뉘어 있음
 
 - name: Verify host network
   hosts: all
@@ -9,3 +9,10 @@
   check_mode: false         # --check로 돌려도 조회는 실제로 실행 (읽기 전용이라 안전)
   roles:
     - verify_network
+
+- name: Verify host base settings
+  hosts: all
+  gather_facts: true        # ansible_facts['hostname'] 사용
+  check_mode: false
+  roles:
+    - verify_base

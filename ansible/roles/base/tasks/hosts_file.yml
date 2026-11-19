@@ -1,0 +1,51 @@
+---
+# ⚠️ Kolla 블록(# BEGIN/END ANSIBLE GENERATED HOSTS)은 수정하지 않는다. blockinfile 사용 금지 (기존 수동 4줄과 중복).
+
+- name: /etc/hosts | read current content
+  ansible.builtin.slurp:
+    src: /etc/hosts
+  register: base_hosts_raw
+
+- name: /etc/hosts | parse lines
+  ansible.builtin.set_fact:
+    base_hosts_lines: >-
+      {{ (base_hosts_raw.content | b64decode).splitlines()
+         | reject('match', '^\s*(#|$)')
+         | reject('match', '^\s*127\.0\.1\.1(\s|$)')
+         | list }}
+
+- name: /etc/hosts | assert no conflicting mappings
+  ansible.builtin.assert:
+    that:
+      - base_hosts_conflicts | length == 0
+    success_msg: "{{ item }}: 다른 IP 매핑 없음"
+    fail_msg: >-
+      {{ item }} 이(가) mgmt_ip({{ hostvars[item].mgmt_ip }}) 가 아닌 주소로도 매핑돼 있습니다:
+      {{ base_hosts_conflicts }}. 자동으로 정리하지 않습니다. 어느 줄을 남길지 결정해 주세요.
+  loop: "{{ groups['all'] }}"
+  vars:
+    base_hosts_conflicts: >-
+      {{ base_hosts_lines
+         | select('search', '\s' ~ (item | regex_escape) ~ '(\s|$)')
+         | reject('match', '^\s*' ~ (hostvars[item].mgmt_ip | regex_escape) ~ '\s')
+         | list }}
+
+- name: /etc/hosts | 127.0.1.1 line is absent
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1(\s|$)'
+    state: absent
+
+# ⚠️ regexp 를 넣지 말 것. 넣으면 Kolla 블록 안의 같은 줄을 치환할 수 있다.
+- name: /etc/hosts | mgmt_ip mapping exists for every node
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ hostvars[item].mgmt_ip }} {{ item }}"
+  loop: "{{ groups['all'] }}"
+  when: base_hosts_matches | length == 0
+  vars:
+    base_hosts_matches: >-
+      {{ base_hosts_lines
+         | select('match', '^\s*' ~ (hostvars[item].mgmt_ip | regex_escape) ~ '\s+(\S+\s+)*'
+                            ~ (item | regex_escape) ~ '(\s|$)')
+         | list }}

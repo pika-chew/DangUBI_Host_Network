@@ -1,0 +1,11 @@
+---
+# 호스트 기본 설정 적용 (hostname, /etc/hosts, 절전, ufw, IP 포워딩, chrony)
+# 먼저 반드시 확인: ansible-playbook playbooks/base.yml --check --diff
+#   → 이미 구성된 노드라면 changed=0 이어야 정상
+# 적용:          ansible-playbook playbooks/base.yml
+
+- name: Apply host base settings
+  hosts: all
+  gather_facts: true        # hostname 비교에 ansible_facts['hostname'] 사용
+  roles:
+    - base
