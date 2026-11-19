@@ -1,33 +1,23 @@
 ---
-# base role 기본값
-# 목표: 이미 손으로 구성된 노드의 "현재 상태"를 그대로 표현 → --check --diff 결과 changed=0
+# 변수 설명: ../README.md
 
-# ── hostname ─────────────────────────────────────────────
-# Kolla 배포 후 호스트명이 바뀌면 RabbitMQ 클러스터 등이 깨진다.
-# false(기본): 호스트명이 inventory_hostname 과 다르면 실패만 한다.
-# true: ansible.builtin.hostname 으로 실제 변경한다. (Kolla 재배포 전제일 때만)
+# ⚠️ true 는 Kolla 재배포 전제일 때만 (호스트명이 바뀌면 RabbitMQ 등이 깨짐)
 base_allow_hostname_change: false
 
-# ── 절전 ────────────────────────────────────────────────
-# 서버로 쓰는 노드가 절전에 들어가면 클러스터에서 빠진다 → 4개 target 을 mask
 base_sleep_targets:
   - sleep.target
   - suspend.target
   - hibernate.target
   - hybrid-sleep.target
 
-# 노트북 덮개 닫힘 무시 (controllers.yml 에서 true)
 base_lid_switch_ignore: false
 base_logind_dropin_path: /etc/systemd/logind.conf.d/lid-switch-ignore.conf
 
-# ── IP 포워딩 ────────────────────────────────────────────
-# controllers.yml 에서 true. false 인 노드는 아무것도 하지 않는다(끄지도 않음).
 base_ip_forward: false
-base_ip_forward_file: /etc/sysctl.d/99-forward.conf   # 기존 파일 이름과 같아야 새 파일이 생기지 않음
+# ⚠️ 기존 파일 이름과 같아야 함 (다르면 새 파일이 생김)
+base_ip_forward_file: /etc/sysctl.d/99-forward.conf
 
-# ── chrony ──────────────────────────────────────────────
-# 각 플래그가 false 면 해당 파일을 관리하지 않음
-# ⚠️ 기본값과 파일 내용은 현재 노드 상태 수집 결과로 확정해야 한다. (PR 설명 참고)
+# ⚠️ 파일 내용은 현재 노드 파일과 글자 하나까지 같아야 함 (다르면 덮어씀)
 # 어떤 서버를 기준으로 비교할 것인가
 chrony_kr_sources: true
 chrony_kr_sources_path: /etc/chrony/sources.d/kr.sources
@@ -36,7 +26,6 @@ chrony_kr_sources_content: |
   server time.bora.net iburst
   pool kr.pool.ntp.org iburst
 
-# 클러스터 내부 시간 서버 역할 호스트. 나머지 노드는 이 호스트의 mgmt_ip 를 바라본다.
 chrony_cluster_server_host: os-ctl1
 chrony_cluster_server: "{{ inventory_hostname == chrony_cluster_server_host }}"
 chrony_cluster_client: "{{ inventory_hostname != chrony_cluster_server_host }}"

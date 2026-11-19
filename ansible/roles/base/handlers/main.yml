@@ -1,19 +1,10 @@
 ---
-# base role handlers
-# 🚨 systemd-logind, NetworkManager, docker 관련 handler 는 만들지 않는다.
-#   - systemd-logind: 재시작 시 데스크톱 세션 강제 종료 (실제 사고). 적용은 재부팅으로만
-#   - NetworkManager: wlo1(Tailscale/SSH)·br-mgmt(관리망)이 끊기고 NAT VIP 가 넘어갈 수 있음
-#   - docker: 해당 노드의 Kolla 컨테이너 전부 재시작
-#   handler 는 변경된 모든 호스트에서 동시에 돌기 때문에, 컨트롤러 3대가 한꺼번에 내려가면
-#   Galera·RabbitMQ 가 정족수를 잃고 수동 복구가 필요해진다.
+# 🚨 systemd-logind, NetworkManager, docker 재시작 handler 를 만들지 않는다. (이유: ../README.md)
 
-# sources.d 파일 변경 → 소스 목록만 다시 읽음 (서비스 중단 없음)
-# command 모듈은 check 모드에서 실행되지 않는다. handler 자체도 변경이 있을 때만 실행된다.
 - name: Reload chrony sources
   ansible.builtin.command: chronyc reload sources
-  changed_when: true    # 호출됐다는 것 자체가 반영 작업이므로 changed 로 보고
+  changed_when: true
 
-# conf.d 파일 변경 → allow/local 설정은 재시작해야 반영됨 (chrony 재시작은 안전)
 - name: Restart chrony
   ansible.builtin.systemd_service:
     name: chrony
