@@ -66,6 +66,7 @@ SSH 접속 주소(`ansible_host`)와 계정(`ansible_user`)은 커밋하지 않�
     │   └── verify.yml              # 네트워크·기본 설정 상태 점검 (읽기 전용)
     └── roles/
         ├── base/                   # 호스트 기본 설정 (현재 수동 구성 상태를 코드로 표현)
+        │   ├── README.md           # 항목별 설명, 변수, 하지 않는 것과 이유
         │   ├── defaults/main.yml   # 기본 변수 (절전 target, chrony 파일 내용·켜기 여부 등)
         │   ├── handlers/main.yml   # chrony reload/restart (logind 재시작 handler 없음)
         │   └── tasks/
