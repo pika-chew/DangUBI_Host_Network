@@ -19,16 +19,17 @@ base_ip_forward_file: /etc/sysctl.d/99-forward.conf
 
 # ⚠️ 파일 내용은 현재 노드 파일과 글자 하나까지 같아야 함 (다르면 덮어씀)
 # 어떤 서버를 기준으로 비교할 것인가
-chrony_kr_sources: true
+chrony_kr_sources: false
 chrony_kr_sources_path: /etc/chrony/sources.d/kr.sources
 chrony_kr_sources_content: |
   server time.google.com iburst
   server time.bora.net iburst
   pool kr.pool.ntp.org iburst
 
+chrony_cluster: false
 chrony_cluster_server_host: os-ctl1
-chrony_cluster_server: "{{ inventory_hostname == chrony_cluster_server_host }}"
-chrony_cluster_client: "{{ inventory_hostname != chrony_cluster_server_host }}"
+chrony_cluster_server: "{{ chrony_cluster | bool and inventory_hostname == chrony_cluster_server_host }}"
+chrony_cluster_client: "{{ chrony_cluster | bool and inventory_hostname != chrony_cluster_server_host }}"
 
 chrony_cluster_server_path: /etc/chrony/conf.d/cluster.conf
 chrony_cluster_server_content: |
