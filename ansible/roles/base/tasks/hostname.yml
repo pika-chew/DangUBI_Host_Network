@@ -2,15 +2,15 @@
 - name: hostname | assert matches inventory name
   ansible.builtin.assert:
     that:
-      - ansible_hostname == inventory_hostname
-    success_msg: "hostname = {{ ansible_hostname }}"
+      - ansible_facts['hostname'] == inventory_hostname
+    success_msg: "hostname = {{ ansible_facts['hostname'] }}"
     fail_msg: >-
-      호스트명이 {{ ansible_hostname }} 인데 인벤토리는 {{ inventory_hostname }} 입니다.
+      호스트명이 {{ ansible_facts['hostname'] }} 인데 인벤토리는 {{ inventory_hostname }} 입니다.
       Kolla 배포 후 변경은 위험하므로 자동으로 바꾸지 않습니다.
       정말 바꿔야 하면 -e base_allow_hostname_change=true 로 실행하세요.
-  when: not base_allow_hostname_change
+  when: not (base_allow_hostname_change | bool)
 
 - name: hostname | set to inventory name (explicitly allowed only)
   ansible.builtin.hostname:
     name: "{{ inventory_hostname }}"
-  when: base_allow_hostname_change
+  when: base_allow_hostname_change | bool

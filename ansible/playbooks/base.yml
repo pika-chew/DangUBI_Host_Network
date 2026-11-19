@@ -6,6 +6,6 @@
 
 - name: Apply host base settings
   hosts: all
-  gather_facts: true        # hostname 비교에 ansible_hostname 사용
+  gather_facts: true        # hostname 비교에 ansible_facts['hostname'] 사용
   roles:
     - base

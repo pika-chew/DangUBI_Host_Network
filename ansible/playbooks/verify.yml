@@ -12,7 +12,7 @@
 
 - name: Verify host base settings
   hosts: all
-  gather_facts: true        # ansible_hostname 사용
+  gather_facts: true        # ansible_facts['hostname'] 사용
   check_mode: false
   roles:
     - verify_base
