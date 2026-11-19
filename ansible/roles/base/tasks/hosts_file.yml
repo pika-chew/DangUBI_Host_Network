@@ -30,20 +30,6 @@
          | reject('match', '^\s*' ~ (hostvars[item].mgmt_ip | regex_escape) ~ '\s')
          | list }}
 
-- name: /etc/hosts | report duplicated mappings
-  ansible.builtin.debug:
-    msg: >-
-      {{ item }} 매핑이 {{ base_hosts_matches | length }}줄 있습니다: {{ base_hosts_matches }}.
-      (예: 수동 추가 줄 + Kolla 블록) 그대로 두며, 정리 방식은 결정이 필요합니다.
-  loop: "{{ groups['all'] }}"
-  when: base_hosts_matches | length > 1
-  vars:
-    base_hosts_matches: >-
-      {{ base_hosts_lines
-         | select('match', '^\s*' ~ (hostvars[item].mgmt_ip | regex_escape) ~ '\s+(\S+\s+)*'
-                            ~ (item | regex_escape) ~ '(\s|$)')
-         | list }}
-
 - name: /etc/hosts | 127.0.1.1 line is absent
   ansible.builtin.lineinfile:
     path: /etc/hosts
