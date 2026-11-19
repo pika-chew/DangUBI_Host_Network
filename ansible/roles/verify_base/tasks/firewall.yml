@@ -2,6 +2,8 @@
 # ufw 미설치면 command 모듈이 "No such file" 로 rc=2 → 통과로 본다
 - name: ufw | get status
   ansible.builtin.command: ufw status
+  environment:
+    LC_ALL: C              # 한국어 로캘이면 "상태: 비활성"으로 출력돼 문자열 비교가 실패함
   register: ufw
   changed_when: false
   failed_when: false
