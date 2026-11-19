@@ -128,6 +128,7 @@ ansible-playbook playbooks/base.yml                                  # 적용
 
 - 호스트명이 인벤토리와 다르면 실패만 합니다. 실제 변경은 `-e base_allow_hostname_change=true`일 때만 합니다. (Kolla 배포 후 변경 위험)
 - 덮개 설정 drop-in이 바뀌어도 `systemd-logind`는 재시작하지 않습니다. 재부팅해야 적용됩니다.
+- 일부 항목만 실행하려면 `--tags hostname|hosts|power|firewall|sysctl|chrony`를 씁니다. 항목별 설명과 변수는 [roles/base/README.md](ansible/roles/base/README.md)에 있습니다.
 
 ### 점검 (verify)
 
