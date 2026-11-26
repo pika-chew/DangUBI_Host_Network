@@ -4,3 +4,7 @@ ansible/inventory/hosts.yml
 
 # Ansible Vault 비밀번호 파일
 .vault_pass*
+
+# Ansible Vault 비밀값 파일 (ansible-vault로 암호화해도 커밋하지 않음)
+# 템플릿은 ansible/vars/vault.example.yml
+ansible/vars/vault.yml
