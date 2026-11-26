@@ -1,0 +1,17 @@
+---
+# 업링크 Wi-Fi 안정화 설정
+# 🚨 Wi-Fi 프로필을 다시 활성화(nmcli con up)하지 않는다. 값만 바꾸고 다음 연결부터 적용된다.
+#    Wi-Fi 는 Tailscale(Ansible 접속) 경로라서, 재활성화하면 실행 중인 플레이북 연결이 끊긴다.
+
+wifi_if: "{{ uplink_if }}"
+
+# NetworkManager 전역 기본값 drop-in. 프로필에 값이 없을 때(새로 만든 프로필 등) 쓰인다.
+# NetworkManager 를 reload/restart 하지 않으므로 재부팅 뒤부터 적용된다.
+wifi_nm_conf_path: /etc/NetworkManager/conf.d/99-wifi-powersave-off.conf
+
+# 현재 연결된 프로필에 직접 넣는 값
+# 802-11-wireless.powersave: 2 = disable (절전 끔. 절전이 켜지면 AP 비콘을 놓쳐 끊김·지연이 생김)
+wifi_powersave: 2
+# connection.autoconnect-retries: 0 = 무한 재시도
+# 기본값(-1)은 전역 기본 4회. 4번 실패하면 NetworkManager 가 몇 분 동안 자동 연결을 멈춘다.
+wifi_autoconnect_retries: 0
