@@ -47,7 +47,7 @@ SSH 접속 주소(`ansible_host`)와 계정(`ansible_user`)은 커밋하지 않�
 ```
 .
 ├── README.md
-├── .gitignore                      # hosts.yml, vars/vault.yml, vault 비밀번호 파일 제외
+├── .gitignore                      # hosts.yml, vault 비밀번호 파일 제외
 ├── .claude/skills/
 │   ├── readme-sync/                # Claude Code 스킬: 푸시 전에 변경 사항을 README에 반영
 │   └── git-workflow/               # Claude Code 스킬: develop 파생 브랜치 → 작은 커밋 → PR → Codex 리뷰 검토
@@ -61,12 +61,10 @@ SSH 접속 주소(`ansible_host`)와 계정(`ansible_user`)은 커밋하지 않�
     │       ├── all.yml             # 공통: uplink_if, ext_cidr, nat_vip, net_prefix, mgmt_cidr
     │       ├── controllers.yml     # mgmt_if: br-mgmt, 덮개 절전 무시·IP 포워딩 켬
     │       └── computes.yml        # mgmt_if: enp3s0, 덮개·포워딩 관리 안 함
-    ├── vars/
-    │   ├── vault.example.yml       # Vault 비밀값 템플릿 (Slack Webhook, healthchecks.io Ping key)
-    │   └── vault.yml               # 실제 비밀값. 템플릿을 복사해 ansible-vault로 암호화 (커밋 제외)
+    ├── requirements.yml            # 필요한 컬렉션 (community.hashi_vault)
     ├── playbooks/
     │   ├── base.yml                # 호스트 기본 설정 적용 (base role)
-    │   ├── uplink.yml              # 업링크 Wi-Fi 안정화·감시 (wifi, net_watchdog, healthchecks role)
+    │   ├── uplink.yml              # 업링크 Wi-Fi 안정화·감시 (wifi, net_watchdog, healthchecks role). 비밀값은 HashiCorp Vault에서 읽음
     │   └── verify.yml              # 네트워크·기본 설정·업링크 감시 상태 점검 (읽기 전용)
     └── roles/
         ├── base/                   # 호스트 기본 설정 (현재 수동 구성 상태를 코드로 표현)
@@ -151,20 +149,43 @@ Wi-Fi가 자주 끊기는 문제를 줄이고, 끊기면 스스로 다시 연결
 - Wi-Fi 연결을 끊거나 NetworkManager를 재시작하는 태스크는 없습니다. 프로필 값은 다음 연결(또는 재부팅)부터 적용됩니다. Ansible 접속 경로가 Wi-Fi 위의 Tailscale이기 때문입니다.
 - watchdog은 Wi-Fi 장치만 다시 연결합니다. `br-mgmt`·veth·VIP에는 손대지 않고 재부팅도 하지 않습니다. 로그는 `journalctl -u net-watchdog.service`로 봅니다.
 
-비밀값은 Ansible Vault로 관리하고, `vars/vault.yml`은 암호화해도 커밋하지 않습니다.
+비밀값은 HashiCorp Vault의 KV v2 엔진에 넣고, 플레이북이 실행될 때 작업자 PC에서 읽습니다. 저장소와 노드의 Ansible 변수에는 남지 않습니다. 노드에는 root만 읽을 수 있는 파일(`/etc/net-watchdog.env`, `/etc/healthchecks-ping.env`, 권한 `0600`)로만 들어갑니다.
+
+| Vault 위치 | 키 | 값 |
+|---|---|---|
+| `dangubi/uplink` (KV v2, mount `dangubi`) | `slack_webhook_url` | Slack Incoming Webhook URL. 비워 두면 Slack 알림 없이 자가 복구만 함 |
+| | `healthchecks_ping_key` | healthchecks.io 프로젝트 Settings의 Ping key (필수) |
+
+mount나 경로를 바꾸려면 `-e hashi_vault_mount=... -e hashi_vault_uplink_path=...`를 씁니다.
+
+처음 한 번 작업자 PC를 준비합니다.
 
 ```bash
-cp vars/vault.example.yml vars/vault.yml       # Slack Webhook URL, healthchecks.io Ping key 입력
-ansible-vault encrypt vars/vault.yml           # 암호화 (vault 비밀번호 설정)
-ansible-vault edit vars/vault.yml              # 값 수정
+ansible-galaxy collection install -r requirements.yml          # community.hashi_vault
+"$(brew --prefix ansible)/libexec/bin/pip" install hvac        # Ansible이 쓰는 파이썬에 hvac 설치 (Homebrew 기준)
+```
 
-ansible-playbook playbooks/uplink.yml --ask-vault-pass --check --diff --limit os-ctl2   # 미리보기
-ansible-playbook playbooks/uplink.yml --ask-vault-pass                                  # 적용
-ansible-playbook playbooks/uplink.yml --ask-vault-pass --tags watchdog                  # 일부 role만
+Vault에 값을 넣습니다. (UI: Secrets engines → Enable → KV, Path `dangubi` → Create secret, Path `uplink`)
+
+```bash
+vault secrets enable -path=dangubi kv-v2
+vault kv put dangubi/uplink slack_webhook_url='<webhook-url>' healthchecks_ping_key='<ping-key>'
+vault kv get dangubi/uplink                                    # 확인
+```
+
+실행할 때마다 Vault 주소와 토큰이 있어야 합니다. 토큰은 `VAULT_TOKEN` 환경 변수나 `vault login`이 만든 `~/.vault-token`에서 읽습니다.
+
+```bash
+export VAULT_ADDR=https://<vault-host>:8200
+export VAULT_TOKEN=<token>                                     # 또는 vault login
+
+ansible-playbook playbooks/uplink.yml --check --diff --limit os-ctl2   # 미리보기
+ansible-playbook playbooks/uplink.yml                                  # 적용
+ansible-playbook playbooks/uplink.yml --tags watchdog                  # 일부 role만 (Vault 읽기는 항상 실행)
 ```
 
 healthchecks.io에서 할 일:
-1. 프로젝트의 Settings에서 Ping key를 만들어 `vault_healthchecks_ping_key`에 넣습니다.
+1. 프로젝트의 Settings에서 Ping key를 만들어 Vault의 `healthchecks_ping_key`에 넣습니다.
 2. 처음 적용하면 호스트명(`os-ctl1` 등)으로 check가 자동으로 만들어집니다. 각 check의 Period를 5분, Grace를 10분 정도로 바꿉니다. (자동 생성 기본값은 하루라서 그대로 두면 늦게 알립니다)
 3. Integrations에서 Slack을 연결해 알림을 받습니다.
 
@@ -193,6 +214,6 @@ ansible-playbook playbooks/verify.yml --list-hosts            # 대상 호스트
 - 하나라도 실패하면 종료 코드가 0이 아니므로 스크립트에서 `&&`로 이어 쓸 수 있습니다.
 - 실패한 호스트는 그 지점에서 점검이 멈춥니다. 원인을 고친 뒤 다시 실행합니다.
 
-`verify.yml`은 vault 비밀번호가 필요 없습니다. uplink를 아직 적용하지 않은 노드는 `verify_uplink` 항목에서 실패합니다.
+`verify.yml`은 HashiCorp Vault 접속이 필요 없습니다. uplink를 아직 적용하지 않은 노드는 `verify_uplink` 항목에서 실패합니다.
 
 `verify.yml`은 조회만 하고 시스템을 바꾸지 않으므로 언제 실행해도 안전합니다. 네트워크 설정을 바꾼 직후, 노드를 재부팅한 뒤, kolla-ansible 배포 전에 실행하는 것을 권장합니다.
