@@ -4,7 +4,7 @@
     that:
       - healthchecks_ping_key | length > 0
       - "'<' not in healthchecks_ping_key"
-    fail_msg: "vault_healthchecks_ping_key 가 비어 있거나 템플릿 값 그대로입니다. vars/vault.yml 을 확인하세요."
+    fail_msg: "HashiCorp Vault dangubi/uplink 의 healthchecks_ping_key 가 비어 있습니다. vault kv get dangubi/uplink 로 확인하세요."
     quiet: true
 
 - name: healthchecks | curl installed

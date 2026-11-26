@@ -1,15 +1,30 @@
 ---
 # 업링크(Wi-Fi) 안정화 + 감시 (wifi, net_watchdog, healthchecks)
-# 비밀값은 vars/vault.yml (ansible-vault 로 암호화, 커밋 제외). 템플릿: vars/vault.example.yml
-# 미리보기: ansible-playbook playbooks/uplink.yml --ask-vault-pass --check --diff --limit os-ctl2
-# 적용:     ansible-playbook playbooks/uplink.yml --ask-vault-pass
+# 비밀값은 HashiCorp Vault KV v2 의 <hashi_vault_mount>/<hashi_vault_uplink_path> 에서 읽는다 (기본 dangubi/uplink)
+#   필요한 키: slack_webhook_url, healthchecks_ping_key
+#   작업자 PC: VAULT_ADDR 환경 변수 + vault login (또는 VAULT_TOKEN), hvac 파이썬 패키지
+# 미리보기: ansible-playbook playbooks/uplink.yml --check --diff --limit os-ctl2
+# 적용:     ansible-playbook playbooks/uplink.yml
 # 🚨 Wi-Fi 연결을 끊거나 NetworkManager 를 재시작하는 태스크는 없다 (Ansible 접속 경로가 Wi-Fi 위의 Tailscale)
 
 - name: Stabilize and monitor uplink
   hosts: all
   gather_facts: false
-  vars_files:
-    - ../vars/vault.yml
+  vars:
+    hashi_vault_mount: dangubi
+    hashi_vault_uplink_path: uplink
+  pre_tasks:
+    # lookup 은 작업자 PC 에서 실행된다. 값이 출력되지 않게 no_log
+    - name: secrets | read uplink secrets from HashiCorp Vault
+      ansible.builtin.set_fact:
+        vault_slack_webhook_url: "{{ uplink_secrets.slack_webhook_url | default('') }}"
+        vault_healthchecks_ping_key: "{{ uplink_secrets.healthchecks_ping_key | default('') }}"
+      vars:
+        uplink_secrets: >-
+          {{ lookup('community.hashi_vault.vault_kv2_get', hashi_vault_uplink_path,
+                    engine_mount_point=hashi_vault_mount).secret }}
+      no_log: true
+      tags: always
   roles:
     - role: wifi
       tags: wifi
