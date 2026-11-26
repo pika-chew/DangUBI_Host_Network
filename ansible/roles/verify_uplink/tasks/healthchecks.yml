@@ -1,0 +1,22 @@
+---
+- name: healthchecks | get timer state
+  ansible.builtin.command: systemctl is-active healthchecks-ping.timer
+  register: hc_timer
+  changed_when: false
+  failed_when: false       # inactive 면 rc≠0
+
+# curl -f 라서 마지막 핑이 HTTP 오류·타임아웃이면 Result 가 success 가 아니다
+- name: healthchecks | get last ping result
+  ansible.builtin.command: systemctl show healthchecks-ping.service -p Result --value
+  register: hc_result
+  changed_when: false
+
+- name: healthchecks | assert timer active and last ping succeeded
+  ansible.builtin.assert:
+    that:
+      - hc_timer.stdout == 'active'
+      - hc_result.stdout == 'success'
+    success_msg: "healthchecks-ping.timer active, 마지막 핑 success"
+    fail_msg: >-
+      healthchecks-ping.timer = {{ hc_timer.stdout }}, 마지막 핑 = {{ hc_result.stdout }}
+      (로그: journalctl -u healthchecks-ping.service)

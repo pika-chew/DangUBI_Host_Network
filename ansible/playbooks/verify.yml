@@ -16,3 +16,10 @@
   check_mode: false
   roles:
     - verify_base
+
+- name: Verify uplink stabilization and monitoring
+  hosts: all
+  gather_facts: false
+  check_mode: false
+  roles:
+    - verify_uplink
