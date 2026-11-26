@@ -1,0 +1,11 @@
+# Managed by Ansible (roles/healthchecks)
+[Unit]
+Description=Ping healthchecks.io every {{ healthchecks_interval }}
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec={{ healthchecks_interval }}
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

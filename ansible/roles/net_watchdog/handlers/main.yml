@@ -1,0 +1,8 @@
+---
+# 타이머만 다시 시작한다. 서비스는 oneshot 이라 다음 주기에 새 설정으로 실행된다.
+- name: Restart net-watchdog timer
+  ansible.builtin.systemd_service:
+    name: net-watchdog.timer
+    state: restarted
+    daemon_reload: true
+  when: not ansible_check_mode   # check 모드에선 새 유닛이 아직 없어 실패할 수 있음

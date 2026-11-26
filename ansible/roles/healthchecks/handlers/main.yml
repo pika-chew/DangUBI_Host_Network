@@ -1,0 +1,7 @@
+---
+- name: Restart healthchecks-ping timer
+  ansible.builtin.systemd_service:
+    name: healthchecks-ping.timer
+    state: restarted
+    daemon_reload: true
+  when: not ansible_check_mode   # check 모드에선 새 유닛이 아직 없어 실패할 수 있음

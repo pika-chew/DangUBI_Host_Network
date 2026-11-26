@@ -1,0 +1,11 @@
+# Managed by Ansible (roles/net_watchdog)
+[Unit]
+Description=Run uplink watchdog every {{ net_watchdog_interval }}
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ net_watchdog_interval }}
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

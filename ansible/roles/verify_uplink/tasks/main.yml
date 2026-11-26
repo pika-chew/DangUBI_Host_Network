@@ -1,0 +1,11 @@
+---
+# uplink.yml (wifi, net_watchdog, healthchecks) 이 적용돼 있는지 점검 (읽기 전용, vault 불필요)
+
+- name: Wi-Fi power save and autoconnect
+  ansible.builtin.include_tasks: wifi.yml
+
+- name: Uplink watchdog timer
+  ansible.builtin.include_tasks: watchdog.yml
+
+- name: healthchecks.io ping timer
+  ansible.builtin.include_tasks: healthchecks.yml

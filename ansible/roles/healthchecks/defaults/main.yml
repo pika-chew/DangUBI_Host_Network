@@ -1,0 +1,16 @@
+---
+# healthchecks.io 핑 (dead man's switch)
+# 노드가 꺼지거나 인터넷이 끊겨 핑이 안 오면 healthchecks.io 가 알린다.
+# watchdog 의 Slack 알림은 노드가 살아 있고 인터넷이 돌아와야 보낼 수 있으므로, 이 핑이 그 빈틈을 메운다.
+
+# 값은 vars/vault.yml
+healthchecks_ping_key: "{{ vault_healthchecks_ping_key | default('') }}"
+healthchecks_base_url: https://hc-ping.com
+healthchecks_slug: "{{ inventory_hostname }}"     # healthchecks.io 의 check 이름
+# ?create=1: 이 slug 의 check 가 없으면 첫 핑 때 자동으로 만든다
+healthchecks_ping_url: "{{ healthchecks_base_url }}/{{ healthchecks_ping_key }}/{{ healthchecks_slug }}?create=1"
+
+# 핑 주기. healthchecks.io 의 check 설정(Period/Grace)도 여기에 맞춰야 한다 (README 참고)
+healthchecks_interval: 5min
+
+healthchecks_env_path: /etc/healthchecks-ping.env

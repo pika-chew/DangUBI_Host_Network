@@ -1,0 +1,11 @@
+# Managed by Ansible (roles/net_watchdog)
+[Unit]
+Description=Uplink watchdog ({{ net_watchdog_if }}): reconnect Wi-Fi and notify Slack
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-{{ net_watchdog_env_path }}
+ExecStart={{ net_watchdog_script_path }}
+TimeoutStartSec={{ (net_watchdog_nmcli_wait | int) + 60 }}

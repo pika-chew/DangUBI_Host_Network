@@ -1,0 +1,50 @@
+---
+- name: net-watchdog | required packages installed
+  ansible.builtin.apt:
+    name:
+      - curl
+      - iputils-ping
+    state: present
+
+- name: net-watchdog | script
+  ansible.builtin.template:
+    src: net-watchdog.sh.j2
+    dest: "{{ net_watchdog_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+# Slack Webhook URL 이 들어가므로 root 만 읽게 하고, 출력·diff 에 남기지 않는다
+- name: net-watchdog | environment file (Slack webhook)
+  ansible.builtin.copy:
+    dest: "{{ net_watchdog_env_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      # Managed by Ansible (roles/net_watchdog)
+      SLACK_WEBHOOK_URL={{ net_watchdog_slack_webhook_url }}
+  no_log: true
+  diff: false
+
+- name: net-watchdog | systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - net-watchdog.service
+    - net-watchdog.timer
+  register: net_watchdog_units
+  notify: Restart net-watchdog timer
+
+# ⚠️ check 모드에서 유닛 파일이 아직 없으면 systemd 가 찾지 못해 실패하므로 건너뛴다
+- name: net-watchdog | timer enabled and started
+  ansible.builtin.systemd_service:
+    name: net-watchdog.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not (ansible_check_mode and net_watchdog_units is changed)

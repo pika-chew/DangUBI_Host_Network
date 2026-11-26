@@ -1,0 +1,49 @@
+---
+- name: wifi | get runtime power save
+  ansible.builtin.command:
+    argv: [iw, dev, "{{ uplink_if }}", get, power_save]
+  register: wifi_ps
+  changed_when: false
+  failed_when: false       # iw 미설치면 rc≠0 → 아래 assert 에서 실패로 보여줌
+
+- name: wifi | assert power save off
+  ansible.builtin.assert:
+    that:
+      - wifi_ps.rc == 0
+      - "'Power save: off' in wifi_ps.stdout"
+    success_msg: "{{ uplink_if }} power save off"
+    fail_msg: "{{ uplink_if }} power save: {{ wifi_ps.stdout | default('') }}{{ wifi_ps.stderr | default(wifi_ps.msg | default('')) }}"
+
+# 프로필은 이름 대신 UUID 로 가리킨다 (nmcli -g 는 이름의 ':' '\' 를 이스케이프함)
+- name: wifi | get active connection UUID on uplink
+  ansible.builtin.command:
+    argv: [nmcli, -g, GENERAL.CON-UUID, device, show, "{{ uplink_if }}"]
+  register: wifi_conn
+  changed_when: false
+
+- name: wifi | get profile settings
+  ansible.builtin.command:
+    argv:
+      - nmcli
+      - -g
+      - 802-11-wireless.powersave,connection.autoconnect-retries
+      - connection
+      - show
+      - uuid
+      - "{{ wifi_conn.stdout | trim }}"
+  register: wifi_profile
+  changed_when: false
+  when: wifi_conn.stdout | trim | length > 0
+
+# nmcli 버전에 따라 "2", "2 (disable)", "disable" 처럼 출력이 달라서 앞부분만 비교한다
+- name: wifi | assert profile powersave disabled and infinite retries
+  ansible.builtin.assert:
+    that:
+      - wifi_conn.stdout | trim | length > 0
+      - wifi_profile.stdout_lines | length >= 2
+      - wifi_profile.stdout_lines[0] is match('^(2( |$)|disable)')
+      - wifi_profile.stdout_lines[1] is match('^0( |$)')
+    success_msg: "프로필 UUID {{ wifi_conn.stdout | trim }}: powersave disable, autoconnect-retries 0"
+    fail_msg: >-
+      프로필 UUID {{ wifi_conn.stdout | trim }}:
+      powersave / autoconnect-retries = {{ wifi_profile.stdout_lines | default([]) | join(' / ') }}

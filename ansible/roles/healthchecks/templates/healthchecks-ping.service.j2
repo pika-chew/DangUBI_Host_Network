@@ -1,0 +1,11 @@
+# Managed by Ansible (roles/healthchecks)
+[Unit]
+Description=Ping healthchecks.io ({{ healthchecks_slug }})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile={{ healthchecks_env_path }}
+# -f: HTTP 오류면 실패 → systemctl show -p Result 로 마지막 핑 성공 여부를 볼 수 있음
+ExecStart=/usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null ${HC_PING_URL}
