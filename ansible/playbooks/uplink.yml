@@ -1,0 +1,19 @@
+---
+# 업링크(Wi-Fi) 안정화 + 감시 (wifi, net_watchdog, healthchecks)
+# 비밀값은 vars/vault.yml (ansible-vault 로 암호화, 커밋 제외). 템플릿: vars/vault.example.yml
+# 미리보기: ansible-playbook playbooks/uplink.yml --ask-vault-pass --check --diff --limit os-ctl2
+# 적용:     ansible-playbook playbooks/uplink.yml --ask-vault-pass
+# 🚨 Wi-Fi 연결을 끊거나 NetworkManager 를 재시작하는 태스크는 없다 (Ansible 접속 경로가 Wi-Fi 위의 Tailscale)
+
+- name: Stabilize and monitor uplink
+  hosts: all
+  gather_facts: false
+  vars_files:
+    - ../vars/vault.yml
+  roles:
+    - role: wifi
+      tags: wifi
+    - role: net_watchdog
+      tags: watchdog
+    - role: healthchecks
+      tags: healthchecks
