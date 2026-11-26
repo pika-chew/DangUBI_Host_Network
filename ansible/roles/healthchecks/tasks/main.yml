@@ -1,0 +1,48 @@
+---
+- name: healthchecks | assert ping key is set
+  ansible.builtin.assert:
+    that:
+      - healthchecks_ping_key | length > 0
+      - "'<' not in healthchecks_ping_key"
+    fail_msg: "vault_healthchecks_ping_key 가 비어 있거나 템플릿 값 그대로입니다. vars/vault.yml 을 확인하세요."
+    quiet: true
+
+- name: healthchecks | curl installed
+  ansible.builtin.apt:
+    name: curl
+    state: present
+
+# 핑 URL 에 ping key 가 들어가므로 root 만 읽게 하고, 출력·diff 에 남기지 않는다
+- name: healthchecks | environment file (ping URL)
+  ansible.builtin.copy:
+    dest: "{{ healthchecks_env_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      # Managed by Ansible (roles/healthchecks)
+      HC_PING_URL={{ healthchecks_ping_url }}
+  no_log: true
+  diff: false
+
+- name: healthchecks | systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - healthchecks-ping.service
+    - healthchecks-ping.timer
+  register: healthchecks_units
+  notify: Restart healthchecks-ping timer
+
+# ⚠️ check 모드에서 유닛 파일이 아직 없으면 systemd 가 찾지 못해 실패하므로 건너뛴다
+- name: healthchecks | timer enabled and started
+  ansible.builtin.systemd_service:
+    name: healthchecks-ping.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not (ansible_check_mode and healthchecks_units is changed)
