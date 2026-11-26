@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Managed by Ansible (roles/net_watchdog). 직접 고치지 말고 role 을 고친다.
+#
+# 업링크가 끊겼는지 점검하고, 연속으로 끊겨 있으면 Wi-Fi 장치만 다시 연결한다.
+# - 연속 실패 FAIL_THRESHOLD 회: Slack 경고(인터넷이 끊겨 있으면 실패할 수 있음) + 첫 재연결
+# - 그 뒤 RECONNECT_EVERY 회마다 재연결 재시도
+# - 복구되면 끊긴 시간과 재연결 횟수를 Slack 으로 알림
+# 🚨 NetworkManager 재시작, 다른 인터페이스 조작, 재부팅은 하지 않는다.
+set -u
+
+IFACE={{ net_watchdog_if | quote }}
+TARGETS=({{ net_watchdog_targets | map('quote') | join(' ') }})
+FAIL_THRESHOLD={{ net_watchdog_fail_threshold | int }}
+RECONNECT_EVERY={{ net_watchdog_reconnect_every | int }}
+NMCLI_WAIT={{ net_watchdog_nmcli_wait | int }}
+SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}    # systemd EnvironmentFile 에서 받음
+
+HOST=$(hostname -s)
+STATE_DIR=/run/net-watchdog                 # tmpfs. 재부팅하면 상태도 초기화
+mkdir -p "$STATE_DIR"
+
+log() { echo "$*"; }                        # systemd 가 journal 로 보냄
+
+read_num() { local v; v=$(cat "$1" 2>/dev/null) || v=0; [[ $v =~ ^[0-9]+$ ]] || v=0; echo "$v"; }
+
+slack() {
+  [[ -n $SLACK_WEBHOOK_URL ]] || return 0
+  local text=$1
+  text=${text//\\/\\\\}
+  text=${text//\"/\\\"}
+  curl -fsS -m 10 -o /dev/null -H 'Content-Type: application/json' \
+    --data-binary "{\"text\":\"${text}\"}" "$SLACK_WEBHOOK_URL" \
+    || log "slack notify failed"
+}
+
+uplink_ok() {
+  local t
+  for t in "${TARGETS[@]}"; do
+    ping -n -q -I "$IFACE" -c 2 -W 3 "$t" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+reconnect() {
+  local state profile
+  # NetworkManager 장치 상태: 40~90 = 연결 진행 중. 이때 끼어들면 오히려 방해되므로 건너뛴다
+  state=$(nmcli -g GENERAL.STATE device show "$IFACE" 2>/dev/null | cut -d' ' -f1)
+  if [[ $state =~ ^[0-9]+$ ]] && (( state >= 40 && state < 100 )); then
+    log "reconnect skipped: $IFACE is activating (state $state)"
+    return 1
+  fi
+  profile=$(nmcli -g GENERAL.CONNECTION device show "$IFACE" 2>/dev/null)
+  if [[ -n $profile ]]; then
+    log "reconnect: nmcli connection up '$profile' ifname $IFACE"
+    nmcli --wait "$NMCLI_WAIT" connection up "$profile" ifname "$IFACE" || log "reconnect failed"
+  else
+    log "reconnect: nmcli device connect $IFACE"
+    nmcli --wait "$NMCLI_WAIT" device connect "$IFACE" || log "reconnect failed"
+  fi
+  return 0
+}
+
+fails=$(read_num "$STATE_DIR/fails")
+
+if uplink_ok; then
+  if (( fails >= FAIL_THRESHOLD )); then
+    since=$(read_num "$STATE_DIR/since")
+    reconnects=$(read_num "$STATE_DIR/reconnects")
+    minutes=$(( ($(date +%s) - since) / 60 ))
+    log "uplink recovered after ${minutes}m (reconnects: ${reconnects})"
+    slack ":white_check_mark: [${HOST}] ${IFACE} 업링크 복구 — 약 ${minutes}분 끊김, 재연결 시도 ${reconnects}회"
+  fi
+  rm -f "$STATE_DIR/fails" "$STATE_DIR/since" "$STATE_DIR/reconnects"
+  exit 0
+fi
+
+fails=$(( fails + 1 ))
+echo "$fails" > "$STATE_DIR/fails"
+(( fails == 1 )) && date +%s > "$STATE_DIR/since"
+log "uplink check failed (${fails} in a row)"
+
+if (( fails == FAIL_THRESHOLD )); then
+  slack ":warning: [${HOST}] ${IFACE} 업링크 끊김 — 연속 ${fails}회 실패, Wi-Fi 재연결 시도"
+fi
+
+if (( fails >= FAIL_THRESHOLD && (fails - FAIL_THRESHOLD) % RECONNECT_EVERY == 0 )); then
+  if reconnect; then
+    echo $(( $(read_num "$STATE_DIR/reconnects") + 1 )) > "$STATE_DIR/reconnects"
+  fi
+fi
+
+exit 0
