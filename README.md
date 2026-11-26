@@ -47,7 +47,7 @@ SSH 접속 주소(`ansible_host`)와 계정(`ansible_user`)은 커밋하지 않�
 ```
 .
 ├── README.md
-├── .gitignore                      # hosts.yml, vault 비밀번호 파일 제외
+├── .gitignore                      # hosts.yml, vars/vault.yml, vault 비밀번호 파일 제외
 ├── .claude/skills/
 │   ├── readme-sync/                # Claude Code 스킬: 푸시 전에 변경 사항을 README에 반영
 │   └── git-workflow/               # Claude Code 스킬: develop 파생 브랜치 → 작은 커밋 → PR → Codex 리뷰 검토
@@ -61,9 +61,13 @@ SSH 접속 주소(`ansible_host`)와 계정(`ansible_user`)은 커밋하지 않�
     │       ├── all.yml             # 공통: uplink_if, ext_cidr, nat_vip, net_prefix, mgmt_cidr
     │       ├── controllers.yml     # mgmt_if: br-mgmt, 덮개 절전 무시·IP 포워딩 켬
     │       └── computes.yml        # mgmt_if: enp3s0, 덮개·포워딩 관리 안 함
+    ├── vars/
+    │   ├── vault.example.yml       # Vault 비밀값 템플릿 (Slack Webhook, healthchecks.io Ping key)
+    │   └── vault.yml               # 실제 비밀값. 템플릿을 복사해 ansible-vault로 암호화 (커밋 제외)
     ├── playbooks/
     │   ├── base.yml                # 호스트 기본 설정 적용 (base role)
-    │   └── verify.yml              # 네트워크·기본 설정 상태 점검 (읽기 전용)
+    │   ├── uplink.yml              # 업링크 Wi-Fi 안정화·감시 (wifi, net_watchdog, healthchecks role)
+    │   └── verify.yml              # 네트워크·기본 설정·업링크 감시 상태 점검 (읽기 전용)
     └── roles/
         ├── base/                   # 호스트 기본 설정 (현재 수동 구성 상태를 코드로 표현)
         │   ├── README.md           # 항목별 설명, 변수, 하지 않는 것과 이유
@@ -77,7 +81,11 @@ SSH 접속 주소(`ansible_host`)와 계정(`ansible_user`)은 커밋하지 않�
         │       ├── firewall.yml    # ufw 비활성 (미설치 노드는 건너뜀)
         │       ├── sysctl.yml      # 컨트롤러: net.ipv4.ip_forward=1 (99-forward.conf)
         │       └── chrony.yml      # chrony 설치·실행, NTP 소스 파일
+        ├── wifi/                   # Wi-Fi 절전 끔, 자동 연결 무한 재시도 (연결을 끊지 않고 값만 바꿈)
+        ├── net_watchdog/           # 1분마다 업링크 ping → 끊기면 Wi-Fi만 재연결, Slack으로 끊김·복구 알림
+        ├── healthchecks/           # 5분마다 healthchecks.io 핑 (노드 다운·인터넷 끊김 감지)
         ├── verify_base/tasks/      # base 설정 점검: 호스트명·이름 해석, 절전, ufw, 포워딩 파일, chrony 동기화
+        ├── verify_uplink/tasks/    # uplink 점검: Wi-Fi 절전·재시도 값, watchdog·핑 타이머와 마지막 실행 결과
         └── verify_network/tasks/
             ├── main.yml            # 점검 순서. 컨트롤러 전용 항목은 group_names로 선택
             ├── route.yml           # 전체: 기본 경로가 uplink_if인지
@@ -130,6 +138,36 @@ ansible-playbook playbooks/base.yml                                  # 적용
 - 덮개 설정 drop-in이 바뀌어도 `systemd-logind`는 재시작하지 않습니다. 재부팅해야 적용됩니다.
 - 일부 항목만 실행하려면 `--tags hostname|hosts|power|firewall|sysctl|chrony`를 씁니다. 항목별 설명과 변수는 [roles/base/README.md](ansible/roles/base/README.md)에 있습니다.
 
+### 업링크 안정화·감시 (uplink)
+
+Wi-Fi가 자주 끊기는 문제를 줄이고, 끊기면 스스로 다시 연결하며 알림을 보냅니다.
+
+| role (태그) | 하는 일 |
+|---|---|
+| `wifi` (`wifi`) | 현재 Wi-Fi 프로필에 `802-11-wireless.powersave 2`(절전 끔), `connection.autoconnect-retries 0`(무한 재시도)을 넣고, 지금 연결은 `iw`로 드라이버 절전만 바로 끕니다. NetworkManager 기본값 drop-in(`/etc/NetworkManager/conf.d/99-wifi-powersave-off.conf`)도 둡니다 |
+| `net_watchdog` (`watchdog`) | `net-watchdog.timer`가 1분마다 `uplink_if`로 `1.1.1.1`/`8.8.8.8`에 ping합니다. 연속 3회 실패하면 Slack 경고와 함께 Wi-Fi 프로필만 다시 올리고(`nmcli connection up`), 끊긴 동안 5회마다 다시 시도합니다. 복구되면 끊긴 시간과 재연결 횟수를 Slack으로 보냅니다 |
+| `healthchecks` (`healthchecks`) | `healthchecks-ping.timer`가 5분마다 `https://hc-ping.com/<ping-key>/<호스트명>?create=1`로 핑합니다. 노드가 꺼지거나 인터넷이 끊겨 Slack을 못 보낼 때는 healthchecks.io가 알립니다 |
+
+- Wi-Fi 연결을 끊거나 NetworkManager를 재시작하는 태스크는 없습니다. 프로필 값은 다음 연결(또는 재부팅)부터 적용됩니다. Ansible 접속 경로가 Wi-Fi 위의 Tailscale이기 때문입니다.
+- watchdog은 Wi-Fi 장치만 다시 연결합니다. `br-mgmt`·veth·VIP에는 손대지 않고 재부팅도 하지 않습니다. 로그는 `journalctl -u net-watchdog.service`로 봅니다.
+
+비밀값은 Ansible Vault로 관리하고, `vars/vault.yml`은 암호화해도 커밋하지 않습니다.
+
+```bash
+cp vars/vault.example.yml vars/vault.yml       # Slack Webhook URL, healthchecks.io Ping key 입력
+ansible-vault encrypt vars/vault.yml           # 암호화 (vault 비밀번호 설정)
+ansible-vault edit vars/vault.yml              # 값 수정
+
+ansible-playbook playbooks/uplink.yml --ask-vault-pass --check --diff --limit os-ctl2   # 미리보기
+ansible-playbook playbooks/uplink.yml --ask-vault-pass                                  # 적용
+ansible-playbook playbooks/uplink.yml --ask-vault-pass --tags watchdog                  # 일부 role만
+```
+
+healthchecks.io에서 할 일:
+1. 프로젝트의 Settings에서 Ping key를 만들어 `vault_healthchecks_ping_key`에 넣습니다.
+2. 처음 적용하면 호스트명(`os-ctl1` 등)으로 check가 자동으로 만들어집니다. 각 check의 Period를 5분, Grace를 10분 정도로 바꿉니다. (자동 생성 기본값은 하루라서 그대로 두면 늦게 알립니다)
+3. Integrations에서 Slack을 연결해 알림을 받습니다.
+
 ### 점검 (verify)
 
 ```bash
@@ -154,5 +192,7 @@ ansible-playbook playbooks/verify.yml --list-hosts            # 대상 호스트
 - 마지막 `PLAY RECAP`에서 호스트별로 `failed=0`인지 확인합니다.
 - 하나라도 실패하면 종료 코드가 0이 아니므로 스크립트에서 `&&`로 이어 쓸 수 있습니다.
 - 실패한 호스트는 그 지점에서 점검이 멈춥니다. 원인을 고친 뒤 다시 실행합니다.
+
+`verify.yml`은 vault 비밀번호가 필요 없습니다. uplink를 아직 적용하지 않은 노드는 `verify_uplink` 항목에서 실패합니다.
 
 `verify.yml`은 조회만 하고 시스템을 바꾸지 않으므로 언제 실행해도 안전합니다. 네트워크 설정을 바꾼 직후, 노드를 재부팅한 뒤, kolla-ansible 배포 전에 실행하는 것을 권장합니다.
