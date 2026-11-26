@@ -42,17 +42,18 @@ uplink_ok() {
 }
 
 reconnect() {
-  local state profile
+  local state uuid
   # NetworkManager 장치 상태: 40~90 = 연결 진행 중. 이때 끼어들면 오히려 방해되므로 건너뛴다
   state=$(nmcli -g GENERAL.STATE device show "$IFACE" 2>/dev/null | cut -d' ' -f1)
   if [[ $state =~ ^[0-9]+$ ]] && (( state >= 40 && state < 100 )); then
     log "reconnect skipped: $IFACE is activating (state $state)"
     return 1
   fi
-  profile=$(nmcli -g GENERAL.CONNECTION device show "$IFACE" 2>/dev/null)
-  if [[ -n $profile ]]; then
-    log "reconnect: nmcli connection up '$profile' ifname $IFACE"
-    nmcli --wait "$NMCLI_WAIT" connection up "$profile" ifname "$IFACE" || log "reconnect failed"
+  # 이름 대신 UUID 로 가리킨다 (nmcli -g 는 이름의 ':' '\' 를 이스케이프함)
+  uuid=$(nmcli -g GENERAL.CON-UUID device show "$IFACE" 2>/dev/null)
+  if [[ -n $uuid ]]; then
+    log "reconnect: nmcli connection up uuid $uuid ifname $IFACE"
+    nmcli --wait "$NMCLI_WAIT" connection up uuid "$uuid" ifname "$IFACE" || log "reconnect failed"
   else
     log "reconnect: nmcli device connect $IFACE"
     nmcli --wait "$NMCLI_WAIT" device connect "$IFACE" || log "reconnect failed"

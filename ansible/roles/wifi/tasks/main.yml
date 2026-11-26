@@ -20,9 +20,10 @@
       [connection]
       wifi.powersave = {{ wifi_powersave }}
 
-- name: wifi | get active connection on uplink
+# 프로필은 이름 대신 UUID 로 가리킨다. nmcli -g 는 이름의 ':' '\' 를 이스케이프해서 그대로 넘기면 못 찾는다
+- name: wifi | get active connection UUID on uplink
   ansible.builtin.command:
-    argv: [nmcli, -g, GENERAL.CONNECTION, device, show, "{{ wifi_if }}"]
+    argv: [nmcli, -g, GENERAL.CON-UUID, device, show, "{{ wifi_if }}"]
   register: wifi_conn
   changed_when: false
   check_mode: false
@@ -42,6 +43,7 @@
       - 802-11-wireless.powersave,connection.autoconnect-retries
       - connection
       - show
+      - uuid
       - "{{ wifi_conn.stdout | trim }}"
   register: wifi_profile
   changed_when: false
@@ -54,6 +56,7 @@
       - nmcli
       - connection
       - modify
+      - uuid
       - "{{ wifi_conn.stdout | trim }}"
       - 802-11-wireless.powersave
       - "{{ wifi_powersave }}"
